@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
+const secret = new TextEncoder().encode( process.env.JWT_SECRET || "dev-secret-change-me" );
 
 const protectedPrefixes = [
   "/dashboard",
@@ -40,7 +40,7 @@ export async function middleware(req: NextRequest) {
   const token = req.cookies.get("token")?.value;
 
   if (!token) {
-    return NextResponse.redirect(new URL("/auth/login", req.url));
+    return NextResponse.redirect(new URL("/auth/login/", req.url));
   }
 
   try {
@@ -49,7 +49,7 @@ export async function middleware(req: NextRequest) {
     // admin 獨立判斷
     if (pathname === "/admin" || pathname.startsWith("/admin/")) {
       if (payload.role !== "admin") {
-        return NextResponse.redirect(new URL("/dashboard", req.url));
+        return NextResponse.redirect(new URL("/dashboard/", req.url));
       }
     }
 
@@ -62,7 +62,7 @@ export async function middleware(req: NextRequest) {
         : [];
 
       if (!enabledProducts.includes(requiredProduct)) {
-        return NextResponse.redirect(new URL("/dashboard", req.url));
+        return NextResponse.redirect(new URL("/dashboard/", req.url));
       }
     }
 
