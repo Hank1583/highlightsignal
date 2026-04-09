@@ -35,8 +35,8 @@ async function getSession(): Promise<Session | null> {
         : ["dashboard"],
     };
 
-    console.log("decoded payload =", payload);
-    console.log("session in layout =", session);
+    // console.log("decoded payload =", payload);
+    // console.log("session in layout =", session);
 
     return session;
   } catch (error) {

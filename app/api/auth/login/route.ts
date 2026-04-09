@@ -93,15 +93,15 @@ export async function POST(req: Request) {
           .filter(Boolean) as ProductKey[],
       ])
     );
-console.log("subscribedApps =", subscribedApps);
-console.log("enabledProducts =", enabledProducts);
-console.log("token payload =", {
-  id: String(data.member_id || ""),
-  email: String(data.email || ""),
-  name: String(data.name || ""),
-  role: data.subscription ? String(data.subscription) : undefined,
-  enabledProducts,
-});
+    // console.log("subscribedApps =", subscribedApps);
+    // console.log("enabledProducts =", enabledProducts);
+    // console.log("token payload =", {
+    //   id: String(data.member_id || ""),
+    //   email: String(data.email || ""),
+    //   name: String(data.name || ""),
+    //   role: data.subscription ? String(data.subscription) : undefined,
+    //   enabledProducts,
+    // });
     const token = await signToken({
       id: String(data.member_id || ""),
       email: String(data.email || ""),
