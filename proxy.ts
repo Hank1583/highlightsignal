@@ -30,7 +30,7 @@ function getRequiredProduct(pathname: string) {
   return matched ? routePermissionMap[matched] : null;
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   console.log("middleware pathname =", pathname);
 
