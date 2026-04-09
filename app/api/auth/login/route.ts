@@ -34,15 +34,13 @@ async function signToken(payload: {
   role?: string;
   enabledProducts: ProductKey[];
 }) {
-  const secret = new TextEncoder().encode(
-    process.env.JWT_SECRET || "dev-secret-change-me"
-  );
-
+  const secret = process.env.JWT_SECRET;
+  const key = new TextEncoder().encode(secret);
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
-    .sign(secret);
+    .sign(key);
 }
 
 export async function POST(req: Request) {

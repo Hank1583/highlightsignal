@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-const secret = new TextEncoder().encode( process.env.JWT_SECRET || "dev-secret-change-me" );
+const secret = process.env.JWT_SECRET;
+const key = new TextEncoder().encode(secret);
 
 const protectedPrefixes = [
   "/dashboard",
@@ -32,28 +33,32 @@ function getRequiredProduct(pathname: string) {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  console.log("middleware pathname =", pathname);
 
   if (!isProtectedPath(pathname)) {
+    console.log("not protected");
     return NextResponse.next();
   }
 
   const token = req.cookies.get("token")?.value;
+  console.log("token exists =", !!token);
 
   if (!token) {
-    return NextResponse.redirect(new URL("/auth/login/", req.url));
+    console.log("no token, redirect login");
+    return NextResponse.redirect(new URL("/auth/login", req.url));
   }
 
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, key);
+    console.log("jwt ok payload =", payload);
 
-    // admin 獨立判斷
     if (pathname === "/admin" || pathname.startsWith("/admin/")) {
       if (payload.role !== "admin") {
-        return NextResponse.redirect(new URL("/dashboard/", req.url));
+        console.log("not admin");
+        return NextResponse.redirect(new URL("/dashboard", req.url));
       }
     }
 
-    // 只有產品頁檢查產品權限，dashboard 不檢查
     const requiredProduct = getRequiredProduct(pathname);
 
     if (requiredProduct) {
@@ -61,13 +66,18 @@ export async function middleware(req: NextRequest) {
         ? payload.enabledProducts
         : [];
 
+      console.log("requiredProduct =", requiredProduct);
+      console.log("enabledProducts =", enabledProducts);
+
       if (!enabledProducts.includes(requiredProduct)) {
-        return NextResponse.redirect(new URL("/dashboard/", req.url));
+        console.log("product not enabled");
+        return NextResponse.redirect(new URL("/dashboard", req.url));
       }
     }
 
     return NextResponse.next();
-  } catch {
+  } catch (err) {
+    console.log("jwt verify failed =", err);
     const response = NextResponse.redirect(new URL("/auth/login", req.url));
     response.cookies.delete("token");
     return response;
