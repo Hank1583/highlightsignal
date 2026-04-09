@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "cross-env NEXT_DISABLE_TURBOPACK=1 next dev",
     "build": "next build",
-    "build:cf": "opennextjs-cloudflare build",
+    "build:cf": "npx @cloudflare/next-on-pages@1",
     "start": "next start",
     "lint": "eslint"
   },
@@ -19,7 +19,7 @@
     "recharts": "^3.5.1"
   },
   "devDependencies": {
-    "@opennextjs/cloudflare": "^1.18.1",
+    "@cloudflare/next-on-pages": "^1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
