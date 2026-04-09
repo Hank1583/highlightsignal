@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-const secret = process.env.JWT_SECRET;
-const key = new TextEncoder().encode(secret);
+const key = new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret-change-me");
 
 const protectedPrefixes = [
   "/dashboard",
