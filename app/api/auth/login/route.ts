@@ -42,13 +42,30 @@ async function signToken(payload: {
   avatar?: string | null;
   loginAt?: string | null;
 }) {
-  const secret = process.env.JWT_SECRET;
+  const secret = process.env.JWT_SECRET || "dev-secret-change-me";
   const key = new TextEncoder().encode(secret);
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
     .sign(key);
+}
+
+function nullableString(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  return String(value);
+}
+
+function nullableNumber(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
 }
 
 export async function POST(req: Request) {
@@ -87,9 +104,21 @@ export async function POST(req: Request) {
       );
     }
 
-    const subscribedApps: SubscribedApp[] = Array.isArray(data.subscribed_apps)
+    const rawSubscribedApps = Array.isArray(data.subscribed_apps)
       ? data.subscribed_apps
       : [];
+    const subscribedApps: SubscribedApp[] = rawSubscribedApps
+      .map((item: unknown) => {
+        const subscribedApp = item as Partial<
+          Record<keyof SubscribedApp, unknown>
+        >;
+
+        return {
+          app_id: nullableString(subscribedApp.app_id) || "",
+          expire_at: nullableString(subscribedApp.expire_at) || "",
+        };
+      })
+      .filter((item: SubscribedApp) => item.app_id);
 
     const enabledProducts = Array.from(
       new Set<ProductKey>([
@@ -117,18 +146,13 @@ export async function POST(req: Request) {
       subscription: data.subscription ? String(data.subscription) : undefined,
       enabledProducts,
       subscribedApps,
-      expireDate: data.expire_date || null,
-      daysLeft:
-        typeof data.days_left === "number"
-          ? data.days_left
-          : data.days_left
-            ? Number(data.days_left)
-            : null,
-      userFortuneId: data.user_fortune_id ?? null,
-      platform: data.platform || null,
-      ip: data.ip || null,
-      avatar: data.avatar || null,
-      loginAt: data.login_at || null,
+      expireDate: nullableString(data.expire_date),
+      daysLeft: nullableNumber(data.days_left),
+      userFortuneId: nullableString(data.user_fortune_id),
+      platform: nullableString(data.platform),
+      ip: nullableString(data.ip),
+      avatar: nullableString(data.avatar),
+      loginAt: nullableString(data.login_at),
     });
 
     const res = NextResponse.json({
@@ -163,7 +187,13 @@ export async function POST(req: Request) {
     console.error("login route error:", error);
 
     return NextResponse.json(
-      { ok: false, message: "Server error" },
+      {
+        ok: false,
+        message:
+          error instanceof Error && error.message
+            ? error.message
+            : "Server error",
+      },
       { status: 500 }
     );
   }
