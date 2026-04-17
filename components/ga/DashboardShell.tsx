@@ -36,7 +36,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
               >
                 <Menu className="h-5 w-5" />
               </button>
-              <div className="text-sm font-bold">Business Cloud · GA</div>
+              <div className="text-sm font-bold">關鍵訊號 · GA</div>
             </div>
           </div>
 

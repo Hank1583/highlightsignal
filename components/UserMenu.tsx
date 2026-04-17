@@ -51,7 +51,7 @@ export default function UserMenu({ user }: Props) {
         "token=; Path=/; Max-Age=0; SameSite=Lax" +
         (window.location.protocol === "https:" ? "; Secure" : "");
 
-      router.replace("/login");
+      router.replace("/auth/login");
       router.refresh();
     } finally {
       setLoggingOut(false);
@@ -63,7 +63,7 @@ export default function UserMenu({ user }: Props) {
     <div className="relative" ref={wrapRef}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen((value) => !value)}
         className="flex items-center gap-3 rounded-2xl px-3 py-2 transition hover:bg-slate-100"
       >
         <div className="hidden text-right leading-tight sm:block">
@@ -96,29 +96,7 @@ export default function UserMenu({ user }: Props) {
               }}
               className="w-full px-4 py-2 text-left text-slate-700 hover:bg-slate-50"
             >
-              帳號設定
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                router.push("/team");
-              }}
-              className="w-full px-4 py-2 text-left text-slate-700 hover:bg-slate-50"
-            >
-              團隊設定
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                router.push("/billing");
-              }}
-              className="w-full px-4 py-2 text-left text-slate-700 hover:bg-slate-50"
-            >
-              訂閱 / 方案
+              帳號與方案
             </button>
 
             <div className="my-2 border-t border-slate-100" />

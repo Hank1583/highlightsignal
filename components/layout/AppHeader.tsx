@@ -2,8 +2,8 @@
 
 import ProductSelect from "@/components/ProductSelect";
 import UserMenu from "@/components/UserMenu";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 type Props = {
   enabledProducts?: string[];
@@ -24,12 +24,12 @@ export default function AppHeader({
       <div className="flex h-full items-center justify-between px-6 lg:px-8">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/dashboard")}
             className="flex items-center gap-3 transition hover:opacity-80"
           >
             <Image
               src="/logo-hl.png"
-              alt="logo"
+              alt="Highlight Signal"
               width={36}
               height={36}
               className="rounded-lg"
@@ -37,11 +37,9 @@ export default function AppHeader({
 
             <div className="hidden sm:block">
               <div className="text-base font-semibold text-slate-900">
-                商務雲
+                關鍵訊號
               </div>
-              <div className="text-xs text-slate-500">
-                Business Cloud
-              </div>
+              <div className="text-xs text-slate-500">Highlight Signal</div>
             </div>
           </button>
 

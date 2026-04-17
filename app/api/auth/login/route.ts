@@ -22,15 +22,25 @@ const appIdMap: Record<string, ProductKey | undefined> = {
   "highlightsignal-ga": "ga",
   "highlightsignal-seo": "seo",
   "highlightsignal-ads": "ads",
-    "highlightsignal-support": "support"
+  "highlightsignal-support": "support"
 };
 
 async function signToken(payload: {
   id: string;
   email: string;
   name: string;
+  appId?: string;
   role?: string;
+  subscription?: string;
   enabledProducts: ProductKey[];
+  subscribedApps: SubscribedApp[];
+  expireDate?: string | null;
+  daysLeft?: number | null;
+  userFortuneId?: number | string | null;
+  platform?: string | null;
+  ip?: string | null;
+  avatar?: string | null;
+  loginAt?: string | null;
 }) {
   const secret = process.env.JWT_SECRET;
   const key = new TextEncoder().encode(secret);
@@ -102,8 +112,23 @@ export async function POST(req: Request) {
       id: String(data.member_id || ""),
       email: String(data.email || ""),
       name: String(data.name || ""),
+      appId: data.app_id ? String(data.app_id) : undefined,
       role: data.subscription ? String(data.subscription) : undefined,
+      subscription: data.subscription ? String(data.subscription) : undefined,
       enabledProducts,
+      subscribedApps,
+      expireDate: data.expire_date || null,
+      daysLeft:
+        typeof data.days_left === "number"
+          ? data.days_left
+          : data.days_left
+            ? Number(data.days_left)
+            : null,
+      userFortuneId: data.user_fortune_id ?? null,
+      platform: data.platform || null,
+      ip: data.ip || null,
+      avatar: data.avatar || null,
+      loginAt: data.login_at || null,
     });
 
     const res = NextResponse.json({
@@ -118,7 +143,10 @@ export async function POST(req: Request) {
         days_left: data.days_left,
         subscribed_apps: subscribedApps,
         enabledProducts,
+        platform: data.platform,
+        ip: data.ip,
         avatar: data.avatar,
+        login_at: data.login_at,
       },
     });
 

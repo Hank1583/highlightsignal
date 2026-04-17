@@ -1,12 +1,10 @@
 "use client";
 import { Mail, Lock, Loader2 } from "lucide-react";
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -34,8 +32,8 @@ export default function LoginPage() {
           return;
         }
 
-        // ✅ Client 導頁一定要用 router
-        router.push("/dashboard");
+        // Force a fresh request so the dashboard reads the new httpOnly cookie.
+        window.location.replace("/dashboard");
       });
     }
 

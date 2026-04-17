@@ -4,9 +4,9 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-4 gap-10">
 
         <div>
-          <h3 className="text-xl font-bold mb-4">BusinessCloud</h3>
+          <h3 className="text-xl font-bold mb-4">Highlight Signal</h3>
           <p className="opacity-80 text-sm leading-relaxed">
-            全能商務雲平台，整合 GA、SEO、CRM、客服、廣告投放與 AI 自動化。
+            整合 GA、SEO、ADS 的行銷成效訊號平台。
           </p>
         </div>
 
@@ -44,7 +44,7 @@ export default function Footer() {
       </div>
 
       <div className="text-center mt-12 opacity-60 text-sm">
-        © 2025 BusinessCloud. All rights reserved.
+        © 2025 Highlight Signal. All rights reserved.
       </div>
     </footer>
   );

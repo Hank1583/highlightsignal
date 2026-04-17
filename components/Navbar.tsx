@@ -28,7 +28,7 @@ export default function Navbar() {
         <Link href="/" className="flex items-center gap-3">
           <Image
             src="/logo-hl.png"
-            alt="BusinessCloud Logo"
+            alt="Highlight Signal Logo"
             width={60}
             height={60}
             className="transition-all duration-300"
@@ -40,7 +40,7 @@ export default function Navbar() {
               scrolled ? "text-blue-700" : "text-white"
             }`}
           >
-            BusinessCloud
+            Highlight Signal
           </span>
         </Link>
 
@@ -75,7 +75,7 @@ export default function Navbar() {
         {/* Desktop CTA */}
         <div className="hidden md:flex gap-3">
           <Link
-            href="/auth/login"
+            href="/enter"
             className={`px-4 py-2 rounded-xl font-semibold transition ${
               scrolled
                 ? "border border-blue-600 text-blue-700 hover:bg-blue-50"
@@ -128,7 +128,7 @@ export default function Navbar() {
 
             <div className="flex gap-3 pt-3 border-t">
               <Link
-                href="/auth/login"
+            href="/enter"
                 className="px-4 py-2 border border-blue-600 text-blue-700 rounded-xl w-full text-center"
               >
                 登入

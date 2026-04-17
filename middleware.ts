@@ -7,6 +7,11 @@ const protectedPrefixes = [
   "/dashboard",
   "/ga",
   "/seo",
+  "/ads",
+  "/account",
+  "/team",
+  "/billing",
+  "/support",
   "/member",
   "/admin",
 ];
@@ -14,6 +19,7 @@ const protectedPrefixes = [
 const routePermissionMap: Record<string, string> = {
   "/ga": "ga",
   "/seo": "seo",
+  "/ads": "ads",
 };
 
 function isProtectedPath(pathname: string) {
@@ -91,6 +97,16 @@ export const config = {
     "/ga",
     "/seo/:path*",
     "/seo",
+    "/ads/:path*",
+    "/ads",
+    "/account/:path*",
+    "/account",
+    "/team/:path*",
+    "/team",
+    "/billing/:path*",
+    "/billing",
+    "/support/:path*",
+    "/support",
     "/member/:path*",
     "/member",
     "/admin/:path*",

@@ -1,4 +1,5 @@
 export const runtime = "edge";
+export const dynamic = "force-dynamic";
 
 import AppHeader from "@/components/layout/AppHeader";
 import { cookies } from "next/headers";
