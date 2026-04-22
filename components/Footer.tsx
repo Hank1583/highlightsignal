@@ -6,7 +6,7 @@ export default function Footer() {
         <div>
           <h3 className="text-xl font-bold mb-4">Highlight Signal</h3>
           <p className="opacity-80 text-sm leading-relaxed">
-            整合 GA、SEO、ADS 的行銷成效訊號平台。
+            整合 GA、Search Intelligence、ADS 的行銷成效訊號平台。
           </p>
         </div>
 
@@ -14,7 +14,7 @@ export default function Footer() {
           <h4 className="font-semibold mb-3">產品</h4>
           <ul className="flex flex-col gap-2">
             <li>GA 數據系統</li>
-            <li>SEO AI</li>
+            <li>Search Intelligence</li>
             <li>客服中心</li>
             <li>CRM</li>
             <li>廣告投放</li>

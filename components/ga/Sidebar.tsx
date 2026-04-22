@@ -2,25 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3 } from "lucide-react";
 import { gaNavItems } from "@/lib/ga/ga-nav";
 
 export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-screen w-72 flex-col border-r border-slate-200 bg-white">
-      <div className="flex-1 overflow-y-auto px-4 py-5">
-        <div className="space-y-6">
+    <aside className="border-b border-slate-200 bg-white lg:min-h-screen lg:w-72 lg:shrink-0 lg:border-b-0 lg:border-r">
+      <div className="px-4 py-5 sm:px-6 lg:sticky lg:top-0 lg:max-h-screen lg:overflow-y-auto lg:px-5">
+        <div className="space-y-5">
           {gaNavItems.map((group) => (
             <div key={group.group}>
-              <div className="mb-2 px-3 text-xs font-bold uppercase tracking-wide text-slate-400">
+              <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-slate-400">
                 {group.group}
               </div>
 
-              <div className="space-y-1">
+              <nav className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
                 {group.items.map((item) => {
-                  const active = pathname === item.href;
+                  const active =
+                    pathname === item.href ||
+                    (item.href !== "/ga" && pathname.startsWith(`${item.href}/`));
                   const Icon = item.icon;
 
                   return (
@@ -29,28 +30,35 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                       href={item.href}
                       onClick={onNavigate}
                       className={[
-                        "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition",
+                        "flex items-start gap-3 rounded-lg border px-4 py-3 transition",
                         active
-                          ? "bg-blue-50 text-blue-700 shadow-sm"
-                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
                       ].join(" ")}
                     >
-                      <Icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                      <Icon
+                        className={[
+                          "mt-0.5 h-[18px] w-[18px]",
+                          active ? "text-white" : "text-slate-500",
+                        ].join(" ")}
+                      />
+                      <span>
+                        <span className="block text-sm font-bold">{item.title}</span>
+                        <span
+                          className={[
+                            "mt-1 block text-xs leading-5",
+                            active ? "text-slate-200" : "text-slate-500",
+                          ].join(" ")}
+                        >
+                          {item.desc}
+                        </span>
+                      </span>
                     </Link>
                   );
                 })}
-              </div>
+              </nav>
             </div>
           ))}
-        </div>
-      </div>
-
-      <div className="border-t border-slate-200 p-4">
-        <div className="rounded-2xl bg-slate-50 p-4">
-          <div className="text-xs font-bold text-slate-500">PLAN</div>
-          <div className="mt-1 text-sm font-extrabold text-slate-900">PRO</div>
-          <div className="mt-2 text-xs text-slate-500">可使用日期區間、多 GA、頁面與轉換分析</div>
         </div>
       </div>
     </aside>

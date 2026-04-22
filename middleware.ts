@@ -6,6 +6,7 @@ const key = new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret-chang
 const protectedPrefixes = [
   "/dashboard",
   "/ga",
+  "/si",
   "/seo",
   "/ads",
   "/account",
@@ -18,7 +19,8 @@ const protectedPrefixes = [
 
 const routePermissionMap: Record<string, string> = {
   "/ga": "ga",
-  "/seo": "seo",
+  "/si": "si",
+  "/seo": "si",
   "/ads": "ads",
 };
 
@@ -74,7 +76,11 @@ export async function middleware(req: NextRequest) {
       console.log("requiredProduct =", requiredProduct);
       console.log("enabledProducts =", enabledProducts);
 
-      if (!enabledProducts.includes(requiredProduct)) {
+      const hasRequiredProduct =
+        enabledProducts.includes(requiredProduct) ||
+        (requiredProduct === "si" && enabledProducts.includes("seo"));
+
+      if (!hasRequiredProduct) {
         console.log("product not enabled");
         return NextResponse.redirect(new URL("/dashboard", req.url));
       }
@@ -95,6 +101,8 @@ export const config = {
     "/dashboard",
     "/ga/:path*",
     "/ga",
+    "/si/:path*",
+    "/si",
     "/seo/:path*",
     "/seo",
     "/ads/:path*",

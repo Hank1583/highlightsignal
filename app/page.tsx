@@ -27,14 +27,14 @@ const coreProducts = [
     points: ["即時流量與趨勢", "轉換事件追蹤", "頁面成效排行"],
   },
   {
-    title: "SEO AI 優化",
-    href: "/seo",
+    title: "Search Intelligence",
+    href: "/si",
     tag: "Search",
-    desc: "整合網站健檢、關鍵字洞察與 AI 建議，快速掌握哪些內容該補強、哪些問題該優先處理。",
+    desc: "整合 SEO、AEO、GEO 三種搜尋視角，從排名、問答到 AI 引用，找出品牌最值得優先處理的搜尋機會。",
     icon: Search,
     color: "text-emerald-600",
     bg: "bg-emerald-50",
-    points: ["網站 SEO 健檢", "AI 內容建議", "關鍵字機會整理"],
+    points: ["SEO 網站健檢", "AEO 問答內容", "GEO AI 曝光"],
   },
   {
     title: "ADS 廣告成效",
@@ -50,7 +50,7 @@ const coreProducts = [
 
 const stats = [
   { label: "核心模組", value: "3" },
-  { label: "資料入口", value: "GA4 / SEO / Ads" },
+  { label: "資料入口", value: "GA4 / SI / Ads" },
   { label: "決策節奏", value: "Daily" },
 ];
 
@@ -65,7 +65,7 @@ export default function LandingPage() {
             transition={{ duration: 0.7 }}
             className="max-w-3xl"
           >
-            <div className="mb-6 inline-flex items-center gap-3 rounded-full border border-zinc-200 bg-white/80 px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm md:mb-8">
+            <div className="inline-flex items-center gap-3 rounded-full border border-zinc-200 bg-white/80 px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm">
               <Image
                 src="/logo-hl.png"
                 alt="Highlight Signal"
@@ -77,17 +77,13 @@ export default function LandingPage() {
               Highlight Signal
             </div>
 
-            <p className="mb-4 inline-flex rounded-full bg-zinc-950 px-4 py-2 text-sm font-semibold text-white">
-              GA + SEO + ADS
-            </p>
-
-            <h1 className="max-w-3xl text-3xl font-black leading-[1.14] tracking-tight text-zinc-950 sm:text-4xl md:text-5xl lg:text-6xl">
+            <h1 className="mt-5 max-w-3xl text-xl font-black leading-[1.2] tracking-tight text-zinc-950 sm:text-2xl md:text-3xl lg:text-4xl">
               把數據、搜尋與廣告成效整理成清楚的下一步。
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-700 sm:text-lg md:mt-6 md:leading-8 lg:text-xl">
-              目前保留三個核心模組：GA 數據分析、SEO AI 優化、ADS
-              廣告成效。少一點分散，多一點可執行的判斷。
+              從 GA 掌握使用者行為，用 Search Intelligence 找出 SEO、AEO、GEO
+              的搜尋機會，再用 ADS 追蹤投放成效，讓每一次優化都有清楚依據。
             </p>
 
             <div className="mt-7 flex flex-col gap-3 sm:mt-9 sm:flex-row">
@@ -183,8 +179,8 @@ export default function LandingPage() {
             <p className="text-sm font-black uppercase tracking-[0.18em] text-emerald-700">
               Core Products
             </p>
-            <h2 className="mt-3 text-3xl font-black leading-tight tracking-tight text-zinc-950 sm:text-4xl md:text-5xl">
-              三個模組，對準同一件事：讓成效更清楚。
+            <h2 className="mt-3 text-2xl font-black leading-tight tracking-tight text-zinc-950 sm:text-3xl md:text-4xl">
+              把數據、搜尋與廣告成效，整理成清楚的下一步。
             </h2>
           </div>
 

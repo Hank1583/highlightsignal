@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BarChart3, LayoutDashboard, Megaphone, Search } from "lucide-react";
 
-export type ProductKey = "dashboard" | "ga" | "seo" | "ads";
+export type ProductKey = "dashboard" | "ga" | "si" | "ads";
 
 const products: {
   key: ProductKey;
@@ -14,7 +14,7 @@ const products: {
 }[] = [
   { key: "dashboard", label: "Dashboard", basePath: "/dashboard", icon: LayoutDashboard },
   { key: "ga", label: "GA 數據分析", basePath: "/ga", icon: BarChart3 },
-  { key: "seo", label: "SEO AI 優化", basePath: "/seo", icon: Search },
+  { key: "si", label: "Search Intelligence", basePath: "/si", icon: Search },
   { key: "ads", label: "ADS 廣告成效", basePath: "/ads", icon: Megaphone },
 ];
 
@@ -31,7 +31,7 @@ export default function ProductSelect({ enabledProducts = ["dashboard"] }: Props
   const normalizedProducts = useMemo(() => {
     const validKeys = new Set(products.map((product) => product.key));
     const safeEnabledProducts = Array.isArray(enabledProducts)
-      ? enabledProducts
+      ? enabledProducts.map((key) => (key === "seo" ? "si" : key))
       : ["dashboard"];
 
     return Array.from(

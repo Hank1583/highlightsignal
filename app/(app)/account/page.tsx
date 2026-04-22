@@ -14,7 +14,8 @@ const SHOP_URL = "https://www.highlight.url.tw/shop/index.html";
 const productNameMap: Record<string, string> = {
   "highlightsignal-ads": "ADS 廣告成效",
   "highlightsignal-ga": "GA 數據分析",
-  "highlightsignal-seo": "SEO AI 優化",
+  "highlightsignal-si": "Search Intelligence",
+  "highlightsignal-seo": "Search Intelligence",
   "highlightsignal-dashboard": "Dashboard",
 };
 

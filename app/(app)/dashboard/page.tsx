@@ -44,7 +44,11 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("zh-TW").format(value);
 }
 
-function hasProduct(session: ServerSession, product: "ga" | "seo" | "ads") {
+function hasProduct(session: ServerSession, product: "ga" | "si" | "ads") {
+  if (product === "si" && session.enabledProducts.includes("seo")) {
+    return true;
+  }
+
   return session.enabledProducts.includes(product);
 }
 
@@ -119,7 +123,7 @@ async function getGaOverview(session: ServerSession) {
 }
 
 async function getSeoOverview(session: ServerSession) {
-  if (!hasProduct(session, "seo")) {
+  if (!hasProduct(session, "si")) {
     return {
       enabled: false,
       connected: false,
@@ -127,7 +131,7 @@ async function getSeoOverview(session: ServerSession) {
       score: null as number | null,
       issues: 0,
       opportunities: 0,
-      message: "尚未啟用 SEO 模組",
+      message: "尚未啟用 Search Intelligence 模組",
     };
   }
 
@@ -214,8 +218,8 @@ export default async function DashboardPage() {
       ],
     },
     {
-      title: "SEO AI 優化",
-      href: "/seo",
+      title: "Search Intelligence",
+      href: "/si/seo",
       icon: Search,
       enabled: seo.enabled,
       status: seo.connected ? "已串接" : seo.enabled ? "待設定" : "未啟用",

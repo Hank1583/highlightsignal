@@ -11,7 +11,7 @@ type SubscribedApp = {
 type ProductKey =
   | "dashboard"
   | "ga"
-  | "seo"
+  | "si"
   | "support"
   | "crm"
   | "ads"
@@ -20,7 +20,8 @@ type ProductKey =
 const appIdMap: Record<string, ProductKey | undefined> = {
   "highlightsignal-dashboard": "dashboard",
   "highlightsignal-ga": "ga",
-  "highlightsignal-seo": "seo",
+  "highlightsignal-si": "si",
+  "highlightsignal-seo": "si",
   "highlightsignal-ads": "ads",
   "highlightsignal-support": "support"
 };
