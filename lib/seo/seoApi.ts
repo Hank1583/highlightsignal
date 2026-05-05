@@ -6,7 +6,7 @@ import type {
 } from "@/lib/seo/types";
 import { highlightPhpApiUrl } from "@/lib/config";
 
-const PHP_API_BASE = highlightPhpApiUrl("seo");
+const PHP_API_BASE = highlightPhpApiUrl("si/seo");
 
 function getErrorMessage(json: any, fallback: string) {
   return json?.error?.message || json?.message || fallback;
@@ -78,7 +78,8 @@ export async function phpAddSeoSite(
 
 export async function phpGetSeoSummary(
   userId: number,
-  siteId: number
+  siteId: number,
+  options?: { force?: boolean }
 ): Promise<SeoSummaryResponse> {
   const res = await fetch(`${PHP_API_BASE}/summary.php`, {
     method: "POST",
@@ -88,6 +89,7 @@ export async function phpGetSeoSummary(
     body: JSON.stringify({
       user_id: userId,
       site_id: siteId,
+      force: Boolean(options?.force),
     }),
   });
 

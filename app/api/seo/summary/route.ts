@@ -8,6 +8,7 @@ export async function POST(req: NextRequest) {
 
     const userId = Number(body.user_id);
     const siteId = Number(body.site_id);
+    const force = Boolean(body.force);
 
     if (!userId || !siteId) {
       return NextResponse.json(
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const data = await phpGetSeoSummary(userId, siteId);
+    const data = await phpGetSeoSummary(userId, siteId, { force });
     return NextResponse.json(data);
   } catch (error) {
     console.error("POST /api/seo/summary error:", error);
