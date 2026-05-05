@@ -48,6 +48,37 @@ const PIE_COLORS = [
   "#0891b2",
 ];
 
+const CHANNEL_LABELS: Record<string, string> = {
+  Direct: "直接流量",
+  "Organic Search": "自然搜尋",
+  "Paid Search": "付費搜尋",
+  "Organic Social": "自然社群",
+  "Paid Social": "付費社群",
+  Referral: "推薦連結",
+  Email: "電子郵件",
+  Display: "多媒體廣告",
+  Video: "影音流量",
+  Affiliates: "聯盟行銷",
+  Unassigned: "未分類",
+  Other: "其他",
+};
+
+const DEVICE_LABELS: Record<string, string> = {
+  desktop: "桌機",
+  mobile: "手機",
+  tablet: "平板",
+  "smart tv": "智慧電視",
+  other: "其他",
+};
+
+function translateChannel(value: string) {
+  return CHANNEL_LABELS[value] || value;
+}
+
+function translateDevice(value: string) {
+  return DEVICE_LABELS[value.toLowerCase()] || value;
+}
+
 export default function TrafficPage() {
   const [dateRange, setDateRange] = useState(getLastDays(30));
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -96,7 +127,7 @@ export default function TrafficPage() {
 
       if (!byChannel[key]) {
         byChannel[key] = {
-          channel: key,
+          channel: translateChannel(key),
           sessions: 0,
           users: 0,
           conversions: 0,
@@ -125,7 +156,7 @@ export default function TrafficPage() {
 
       if (!byDevice[key]) {
         byDevice[key] = {
-          device: key,
+          device: translateDevice(key),
           sessions: 0,
         };
       }
@@ -148,8 +179,8 @@ export default function TrafficPage() {
     const returningUsers = Math.max(0, totalUsers - newUsers);
 
     return [
-      { name: "New Users", value: newUsers },
-      { name: "Returning Users", value: returningUsers },
+      { name: "新訪客", value: newUsers },
+      { name: "回訪訪客", value: returningUsers },
     ];
   }, [gaDailySummary]);
 
@@ -157,7 +188,7 @@ export default function TrafficPage() {
     <div className="space-y-6">
       <PageHeader
         title="流量來源"
-        description="分析 Channel、Device 與新舊訪客結構"
+        description="分析流量來源、裝置與新舊訪客結構"
       />
 
       <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -245,13 +276,13 @@ export default function TrafficPage() {
       {!loading && !error && gaConnections.length > 0 && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <SectionCard
-            title="Channel Group"
+            title="流量來源"
             description={`${dateRange.start} ~ ${dateRange.end}`}
           >
             <div className="h-[340px]">
               {channelAgg.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-slate-400">
-                  目前沒有 channel 資料
+                  目前沒有流量來源資料
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -260,9 +291,9 @@ export default function TrafficPage() {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="sessions" fill="#2563eb" />
-                    <Bar dataKey="users" fill="#16a34a" />
-                    <Bar dataKey="conversions" fill="#9333ea" />
+                    <Bar dataKey="sessions" name="工作階段" fill="#2563eb" />
+                    <Bar dataKey="users" name="使用者" fill="#16a34a" />
+                    <Bar dataKey="conversions" name="轉換" fill="#9333ea" />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -270,13 +301,13 @@ export default function TrafficPage() {
           </SectionCard>
 
           <SectionCard
-            title="Device"
+            title="裝置"
             description={`${dateRange.start} ~ ${dateRange.end}`}
           >
             <div className="h-[340px]">
               {deviceAgg.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-slate-400">
-                  目前沒有 device 資料
+                  目前沒有裝置資料
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -304,7 +335,7 @@ export default function TrafficPage() {
           </SectionCard>
 
           <SectionCard
-            title="New vs Returning Users"
+            title="新訪客與回訪訪客"
             description={`${dateRange.start} ~ ${dateRange.end}`}
           >
             <div className="h-[340px]">
