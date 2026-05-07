@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import PageHeader from "@/components/ga/PageHeader";
 import KpiCard from "@/components/ga/KpiCard";
@@ -98,6 +99,8 @@ export default function DashboardPage() {
 
   const loading = connectionsLoading || dataLoading;
   const error = connectionsError || dataError;
+  const hasNoSyncedData =
+    !loading && !error && gaConnections.length > 0 && gaDailySummary.length === 0;
 
   const totalOverview = useMemo(() => {
     const acc = {
@@ -383,6 +386,23 @@ export default function DashboardPage() {
 
       {!loading && !error && gaConnections.length > 0 && (
         <>
+          {hasNoSyncedData && (
+            <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+              <div className="text-base font-extrabold text-amber-900">
+                目前查不到這個區間的 GA 資料
+              </div>
+              <p className="mt-2 text-sm font-medium text-amber-800">
+                可能是新增 GA 帳號後還沒有同步歷史資料，或目前選擇的日期區間尚未寫入 DB。請到帳號管理選擇日期區間後按「同步到 DB」。
+              </p>
+              <Link
+                href="/ga/account"
+                className="mt-4 inline-flex items-center rounded-2xl bg-amber-900 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-800"
+              >
+                前往帳號管理同步資料
+              </Link>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <KpiCard
               title="Total Users"
