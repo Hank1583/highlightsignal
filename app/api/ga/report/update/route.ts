@@ -1,6 +1,7 @@
 export const runtime = "edge";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
+import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";
 import { updateGaReport } from "@/lib/ga/gaApi";
 
 export async function POST(req: Request) {
@@ -19,6 +20,13 @@ export async function POST(req: Request) {
     return Response.json(
       { ok: false, message: "Unauthorized" },
       { status: 401 }
+    );
+  }
+
+  if (isDemoSession(user)) {
+    return Response.json(
+      { ok: false, message: DEMO_READ_ONLY_MESSAGE },
+      { status: 403 }
     );
   }
 

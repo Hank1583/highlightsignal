@@ -1,25 +1,53 @@
 export const runtime = "edge";
+
 import { NextRequest, NextResponse } from "next/server";
+import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";
+import { getServerSession } from "@/lib/serverSession";
 import { phpAddSeoSite, phpListSeoSites } from "@/lib/seo/seoApi";
 
-export async function GET(req: NextRequest) {
-  try {
-    const userId = Number(req.headers.get("x-user-id"));
+function hasSiAccess(enabledProducts: string[]) {
+  return enabledProducts.includes("si") || enabledProducts.includes("seo");
+}
 
-    if (!userId) {
-      return NextResponse.json(
+async function requireSeoSession() {
+  const session = await getServerSession();
+
+  if (!session?.id) {
+    return {
+      session: null,
+      response: NextResponse.json(
+        { ok: false, error: { code: "UNAUTHORIZED", message: "Unauthorized" } },
+        { status: 401 }
+      ),
+    };
+  }
+
+  if (!hasSiAccess(session.enabledProducts)) {
+    return {
+      session: null,
+      response: NextResponse.json(
         {
           ok: false,
           error: {
-            code: "MISSING_USER_ID",
-            message: "缺少 x-user-id",
+            code: "FORBIDDEN",
+            message: "Search Intelligence is not enabled for this account.",
           },
         },
-        { status: 400 }
-      );
-    }
+        { status: 403 }
+      ),
+    };
+  }
 
-    const data = await phpListSeoSites(userId);
+  return { session, response: null };
+}
+
+export async function GET() {
+  try {
+    const { session, response } = await requireSeoSession();
+
+    if (response) return response;
+
+    const data = await phpListSeoSites(Number(session.id));
     return NextResponse.json(data);
   } catch (error) {
     console.error("GET /api/seo/sites error:", error);
@@ -30,7 +58,7 @@ export async function GET(req: NextRequest) {
         error: {
           code: "INTERNAL_ERROR",
           message:
-            error instanceof Error ? error.message : "取得站點列表失敗",
+            error instanceof Error ? error.message : "Failed to list SEO sites",
         },
       },
       { status: 500 }
@@ -40,8 +68,25 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const { session, response } = await requireSeoSession();
+
+    if (response) return response;
+
+    if (isDemoSession(session)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "DEMO_READ_ONLY", message: DEMO_READ_ONLY_MESSAGE },
+        },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
-    const data = await phpAddSeoSite(body);
+    const data = await phpAddSeoSite({
+      ...body,
+      user_id: Number(session.id),
+    });
 
     return NextResponse.json(data);
   } catch (error) {
@@ -52,7 +97,8 @@ export async function POST(req: NextRequest) {
         ok: false,
         error: {
           code: "INTERNAL_ERROR",
-          message: error instanceof Error ? error.message : "新增站點失敗",
+          message:
+            error instanceof Error ? error.message : "Failed to add SEO site",
         },
       },
       { status: 500 }

@@ -3,6 +3,7 @@ import { Mail, Lock, Loader2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { DEMO_EMAIL } from "@/lib/demo";
 
 export default function LoginPage() {
   const [error, setError] = useState("");
@@ -36,6 +37,32 @@ export default function LoginPage() {
         window.location.replace("/dashboard");
       });
     }
+
+  function handleDemoLogin() {
+    setError("");
+
+    startTransition(async () => {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email: DEMO_EMAIL,
+          password: "demo",
+          app_id: "highlightsignal",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.ok) {
+        setError(data.message);
+        return;
+      }
+
+      window.location.replace("/dashboard");
+    });
+  }
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 px-6">
@@ -103,7 +130,20 @@ export default function LoginPage() {
               "登入"
             )}
           </button>
+
+          <button
+            type="button"
+            onClick={handleDemoLogin}
+            disabled={isPending}
+            className="w-full border border-amber-200 bg-amber-50 py-3 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60 rounded-xl"
+          >
+            檢視 Demo 版本
+          </button>
         </form>
+
+        <p className="mt-3 text-center text-xs text-gray-500">
+          Demo 帳號：{DEMO_EMAIL}，僅供檢視，不能新增或修改資料。
+        </p>
 
         <p className="text-center text-gray-600 mt-5 text-sm">
           還沒有帳號？

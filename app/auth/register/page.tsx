@@ -42,22 +42,21 @@ export default function RegisterPage() {
       // === 2. 註冊成功 → 自動呼叫 login.php ===
       setSuccess("註冊成功！正在自動登入...");
 
-      const loginData = new FormData();
-      loginData.append("email", email);
-      loginData.append("password", password);
-      loginData.append("app_id", "highlight-agent");
-
-      const loginRes = await fetch("https://www.highlight.url.tw/api/login.php", {
+      const loginRes = await fetch("/api/auth/login", {
         method: "POST",
-        body: loginData,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email,
+          password,
+          app_id: "highlightsignal",
+        }),
       });
 
       const login = await loginRes.json();
 
-      if (login.status === "success") {
+      if (login.ok) {
         // === 3. 自動登入 ===
-        localStorage.setItem("user", JSON.stringify(login));
-
         setTimeout(() => {
           window.location.href = "/dashboard";
         }, 1000);
@@ -65,7 +64,7 @@ export default function RegisterPage() {
         setError("自動登入失敗，請手動登入");
       }
 
-    } catch (err) {
+    } catch {
       setError("伺服器連線失敗，請稍後再試");
     }
 

@@ -1,6 +1,7 @@
 import { ArrowUpRight, CalendarDays, CheckCircle2, Store } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getServerSession, type ServerSession } from "@/lib/serverSession";
+import { productName, UPGRADE_URL } from "@/lib/subscription";
 
 type SubscriptionRecord = {
   appId: string;
@@ -9,15 +10,7 @@ type SubscriptionRecord = {
   status: "active" | "expired";
 };
 
-const SHOP_URL = "https://www.highlight.url.tw/shop/index.html";
-
-const productNameMap: Record<string, string> = {
-  "highlightsignal-ads": "ADS 廣告成效",
-  "highlightsignal-ga": "GA 數據分析",
-  "highlightsignal-si": "Search Intelligence",
-  "highlightsignal-seo": "Search Intelligence",
-  "highlightsignal-dashboard": "Dashboard",
-};
+const SHOP_URL = UPGRADE_URL;
 
 const cardClass = "rounded-lg border border-slate-200 bg-white p-6 shadow-sm";
 
@@ -43,7 +36,7 @@ function formatUnixTime(value?: number) {
 function getSubscriptionRecords(session: ServerSession): SubscriptionRecord[] {
   return session.subscribedApps.map((item) => ({
     appId: item.app_id,
-    appName: productNameMap[item.app_id] || item.app_id,
+    appName: productName(item.app_id),
     expireAt: item.expire_at,
     status: isActiveByDate(item.expire_at) ? "active" : "expired",
   }));

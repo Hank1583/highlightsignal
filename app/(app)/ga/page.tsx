@@ -48,10 +48,11 @@ function formatPct(v: number) {
 }
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<{ id: number } | null>(null);
+  const [user, setUser] = useState<{ id: number; isDemo?: boolean } | null>(null);
   const [dateRange, setDateRange] = useState(getLastDays(30));
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const accountFetchLink = user?.id
+  const isDemo = Boolean(user?.isDemo);
+  const accountFetchLink = user?.id && !isDemo
   ? highlightPhpApiUrl(`ga/account_fetch.php?member_id=${user.id}`)
   : null;
   const {
@@ -290,7 +291,15 @@ export default function DashboardPage() {
         description="快速查看流量、成長與整體網站表現"
       />
       <div className="flex flex-wrap gap-3">
-        {accountFetchLink && (
+        {isDemo ? (
+          <button
+            type="button"
+            disabled
+            className="inline-flex cursor-not-allowed items-center rounded-2xl bg-slate-200 px-4 py-2 text-sm font-bold text-slate-500 shadow-sm"
+          >
+            ＋ 新增 GA 帳號
+          </button>
+        ) : accountFetchLink ? (
           <a
             href={accountFetchLink}
             target="_blank"
@@ -299,7 +308,7 @@ export default function DashboardPage() {
           >
             ＋ 新增 GA 帳號
           </a>
-        )}
+        ) : null}
       </div>
       
       <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">

@@ -18,6 +18,13 @@ export type GAConnection = {
   status?: string;
 };
 
+export type CurrentUser = {
+  id: number;
+  email?: string;
+  name?: string;
+  isDemo?: boolean;
+};
+
 export type GADailySummaryRow = {
   date: string;
   connection_id?: number;
@@ -202,7 +209,18 @@ export function useGaData({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const stableIds = useMemo(() => [...ids].sort((a, b) => a - b), [ids]);
+  const idsKey = ids.join(",");
+  const stableIds = useMemo(
+    () =>
+      idsKey
+        ? idsKey
+            .split(",")
+            .map((id) => Number(id))
+            .filter((id) => Number.isFinite(id))
+            .sort((a, b) => a - b)
+        : [],
+    [idsKey]
+  );
 
   useEffect(() => {
     let alive = true;
@@ -279,7 +297,7 @@ export function useGaData({
     return () => {
       alive = false;
     };
-  }, [stableIds.join(","), dateRange.start, dateRange.end]);
+  }, [stableIds, dateRange.start, dateRange.end]);
 
   return {
     gaDailySummary,
@@ -444,4 +462,38 @@ export function useGaReportUpdate() {
   };
 
   return { updateReport, saving, error };
+}
+
+export function useCurrentUser() {
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await fetch("/api/auth/me", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const json = await res.json();
+
+        if (!alive) return;
+        setUser(res.ok && json?.ok ? json.data : null);
+      } catch {
+        if (!alive) return;
+        setUser(null);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return { user, loading };
 }

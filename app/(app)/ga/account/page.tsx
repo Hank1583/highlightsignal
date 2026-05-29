@@ -10,6 +10,7 @@ type User = {
   id: number;
   email?: string;
   name?: string;
+  isDemo?: boolean;
 };
 
 type DateRange = {
@@ -75,7 +76,9 @@ export default function AccountPage() {
     Boolean(syncRange.start && syncRange.end) && syncRange.start > syncRange.end;
 
   const canSync =
-    Boolean(user?.id && syncRange.start && syncRange.end) && !isInvalidRange;
+    Boolean(user?.id && syncRange.start && syncRange.end) &&
+    !isInvalidRange &&
+    !user?.isDemo;
 
   const handleSync = () => {
     if (!canSync || syncing) return;
@@ -110,7 +113,11 @@ export default function AccountPage() {
       />
 
       <div className="flex flex-wrap gap-3">
-        {accountFetchLink && (
+        {user?.isDemo ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800">
+            Demo 帳號僅供檢視，無法串接或同步 GA。
+          </div>
+        ) : accountFetchLink ? (
           <a
             href={accountFetchLink}
             target="_blank"
@@ -119,7 +126,7 @@ export default function AccountPage() {
           >
             綁定 GA 帳號
           </a>
-        )}
+        ) : null}
       </div>
 
       <SectionCard

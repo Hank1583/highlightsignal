@@ -21,19 +21,19 @@ const siNavGroups = [
       {
         href: "/si/seo",
         title: "SEO 總覽",
-        desc: "網站健康與搜尋表現",
+        desc: "網站健康度、索引狀態與搜尋成效",
         icon: Search,
       },
       {
         href: "/si/seo?tab=keywords",
         title: "關鍵字機會",
-        desc: "推進、防守與觀察字",
+        desc: "整理排名、曝光與內容缺口",
         icon: Target,
       },
       {
         href: "/si/seo?tab=technical",
-        title: "技術與 AI 建議",
-        desc: "問題與優先處理建議",
+        title: "技術 SEO",
+        desc: "檢查結構、速度與可爬取問題",
         icon: Wrench,
       },
     ],
@@ -43,20 +43,20 @@ const siNavGroups = [
     items: [
       {
         href: "/si/aeo",
-        title: "問答總覽",
-        desc: "答案引擎優化狀態",
+        title: "AEO 總覽",
+        desc: "提高被答案引擎引用的機會",
         icon: Bot,
       },
       {
         href: "/si/aeo?tab=faq",
-        title: "常見問題",
-        desc: "使用者常問與追問",
+        title: "FAQ 策略",
+        desc: "建立可被直接回答的內容結構",
         icon: FileQuestion,
       },
       {
         href: "/si/aeo?tab=snippet",
         title: "精選摘要",
-        desc: "可被直接引用的答案",
+        desc: "優化段落、清單與問答格式",
         icon: MessageSquareText,
       },
     ],
@@ -67,19 +67,19 @@ const siNavGroups = [
       {
         href: "/si/geo",
         title: "GEO 總覽",
-        desc: "生成式搜尋曝光",
+        desc: "檢視品牌在生成式搜尋中的能見度",
         icon: Globe2,
       },
       {
         href: "/si/geo?tab=citations",
-        title: "AI 引用監測",
-        desc: "模型回答中的引用",
+        title: "AI 引用訊號",
+        desc: "追蹤可被 AI 回答引用的內容基礎",
         icon: ShieldCheck,
       },
       {
         href: "/si/geo?tab=visibility",
-        title: "品牌曝光",
-        desc: "品牌被提及的情境",
+        title: "AI 能見度",
+        desc: "比較品牌、主題與答案覆蓋度",
         icon: Trophy,
       },
     ],
@@ -104,6 +104,15 @@ export default function SiNav() {
   return (
     <aside className="border-b border-slate-200 bg-white lg:min-h-screen lg:w-72 lg:shrink-0 lg:border-b-0 lg:border-r">
       <div className="px-4 py-5 sm:px-6 lg:sticky lg:top-0 lg:max-h-screen lg:overflow-y-auto lg:px-5">
+        <div className="mb-5 px-1">
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            Search Intelligence
+          </div>
+          <div className="mt-1 text-sm font-black text-slate-900">
+            SEO / AEO / GEO
+          </div>
+        </div>
+
         <div className="space-y-5">
           {siNavGroups.map((group) => (
             <div key={group.group}>

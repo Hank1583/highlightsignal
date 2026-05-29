@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, ExternalLink, Globe, Info, X } from "lucide-react";
 
 type Props = {
-  userId: number;
   open: boolean;
   onClose: () => void;
   onSuccess?: () => void | Promise<void>;
@@ -70,7 +69,6 @@ function getErrorMessage(json: any, fallback: string) {
 }
 
 export default function AddSeoSiteDialog({
-  userId,
   open,
   onClose,
   onSuccess,
@@ -128,7 +126,6 @@ export default function AddSeoSiteDialog({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          user_id: userId,
           site_name: siteName.trim() || null,
           site_url: finalUrl,
         }),

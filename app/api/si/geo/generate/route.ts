@@ -3,6 +3,7 @@ export const runtime = "edge";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
+import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";
 import { phpGenerateSiSummary } from "@/lib/si/siApi";
 
 export async function POST(req: NextRequest) {
@@ -22,6 +23,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { ok: false, error: { code: "UNAUTHORIZED", message: "Unauthorized" } },
         { status: 401 }
+      );
+    }
+
+    if (isDemoSession(user)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "DEMO_READ_ONLY", message: DEMO_READ_ONLY_MESSAGE },
+        },
+        { status: 403 }
       );
     }
 
@@ -60,4 +71,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

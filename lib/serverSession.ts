@@ -1,5 +1,8 @@
 import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
+import { isDemoEmail } from "@/lib/demo";
+import { getJwtSecret } from "@/lib/jwtSecret";
+import { normalizeEnabledProducts } from "@/lib/products";
+import { verifyAnyToken } from "@/lib/sessionToken";
 
 export type ServerSession = {
   id: string;
@@ -21,21 +24,25 @@ export type ServerSession = {
   avatar?: string;
   loginAt?: string;
   tokenExpiresAt?: number;
+  isDemo?: boolean;
 };
 
-const jwtKey = new TextEncoder().encode(
-  process.env.JWT_SECRET || "dev-secret-change-me"
-);
+const jwtKey = getJwtSecret();
 
 export async function getServerSession(): Promise<ServerSession | null> {
-  const token = (await cookies()).get("token")?.value;
+  const tokenStore = await cookies();
+  const tokens = tokenStore.getAll("token").map((cookie) => cookie.value);
 
-  if (!token) {
+  if (tokens.length === 0) {
     return null;
   }
 
   try {
-    const { payload } = await jwtVerify(token, jwtKey);
+    const payload = await verifyAnyToken(tokens, jwtKey);
+
+    if (!payload) {
+      return null;
+    }
 
     return {
       id: String(payload.id || ""),
@@ -48,9 +55,7 @@ export async function getServerSession(): Promise<ServerSession | null> {
         : payload.role
           ? String(payload.role)
           : undefined,
-      enabledProducts: Array.isArray(payload.enabledProducts)
-        ? payload.enabledProducts.map(String)
-        : ["dashboard"],
+      enabledProducts: normalizeEnabledProducts(payload.enabledProducts),
       subscribedApps: Array.isArray(payload.subscribedApps)
         ? payload.subscribedApps
             .map((item) => ({
@@ -71,6 +76,7 @@ export async function getServerSession(): Promise<ServerSession | null> {
       avatar: payload.avatar ? String(payload.avatar) : undefined,
       loginAt: payload.loginAt ? String(payload.loginAt) : undefined,
       tokenExpiresAt: typeof payload.exp === "number" ? payload.exp : undefined,
+      isDemo: Boolean(payload.isDemo) || isDemoEmail(payload.email),
     };
   } catch {
     return null;

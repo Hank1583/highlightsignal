@@ -27,6 +27,11 @@ type ModuleConfig = {
   iconMode: "aeo" | "geo";
 };
 
+type CurrentUser = {
+  id: number;
+  isDemo?: boolean;
+};
+
 const DEFAULT_SITE_ID = 1;
 
 async function parseJsonSafe<T>(res: Response): Promise<T> {
@@ -64,6 +69,125 @@ function draftModeLabel(value?: string) {
   return value || "建議草稿";
 }
 
+function methodologyCopy(module: SiModule) {
+  if (module === "aeo") {
+    return {
+      title: "AEO 分析口徑",
+      desc: "以 SEO summary、頁面結構、FAQ/短答案覆蓋度與可回答性為基準，評估內容被 AI answer engine 摘用的準備度。",
+      cadence: "建議在新增內容、調整 FAQ 或修正技術問題後重新產生分析。",
+    };
+  }
+
+  return {
+    title: "GEO 分析口徑",
+    desc: "以品牌/主題實體、引用線索、搜尋意圖覆蓋與內容可信度為基準，評估網站在生成式搜尋中的能見度機會。",
+    cadence: "建議在完成 SEO 修正、品牌內容更新或新增權威來源後重新產生分析。",
+  };
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function confidenceScore(value?: string) {
+  if (value === "high") return 92;
+  if (value === "medium") return 72;
+  if (value === "low") return 46;
+  return 60;
+}
+
+function buildScoreBreakdown(module: SiModule, summary: SiSummary) {
+  const itemCount = summary.items.length;
+  const actionCount = summary.actions.length;
+  const sideAverage = summary.sideItems.length
+    ? summary.sideItems.reduce((sum, item) => sum + Number(item.score || 0), 0) /
+      summary.sideItems.length
+    : 58;
+  const confidenceAverage = summary.items.length
+    ? summary.items.reduce((sum, item) => sum + confidenceScore(item.confidence), 0) /
+      summary.items.length
+    : 58;
+  const hasDrafts = summary.items.some((item) => Boolean(item.draft));
+  const hasBasis =
+    summary.metrics.some((item) => Boolean(item.basis)) ||
+    summary.items.some((item) => Boolean(item.basis));
+  const hasTags = summary.items.some((item) => item.tags && item.tags.length > 0);
+
+  if (module === "aeo") {
+    const items = [
+      {
+        label: "FAQ / 問答覆蓋度",
+        weight: 30,
+        score: clampScore(Math.min(100, itemCount * 18 + (hasTags ? 12 : 0))),
+      },
+      {
+        label: "頁面結構清楚度",
+        weight: 20,
+        score: clampScore(sideAverage),
+      },
+      {
+        label: "短答案可摘用性",
+        weight: 25,
+        score: clampScore(confidenceAverage + (hasDrafts ? 8 : 0)),
+      },
+      {
+        label: "Schema / metadata 完整度",
+        weight: 15,
+        score: clampScore(hasBasis ? 78 : 52),
+      },
+      {
+        label: "技術 SEO 健康度",
+        weight: 10,
+        score: clampScore(actionCount ? 72 : 58),
+      },
+    ];
+
+    return {
+      label: "AEO readiness score",
+      items,
+      total: clampScore(
+        items.reduce((sum, item) => sum + item.score * (item.weight / 100), 0)
+      ),
+    };
+  }
+
+  const items = [
+    {
+      label: "品牌 / 主題實體清楚度",
+      weight: 25,
+      score: clampScore(sideAverage),
+    },
+    {
+      label: "內容可信度與引用線索",
+      weight: 25,
+      score: clampScore(hasBasis ? 80 : 55),
+    },
+    {
+      label: "搜尋意圖覆蓋度",
+      weight: 20,
+      score: clampScore(Math.min(100, itemCount * 16 + actionCount * 8)),
+    },
+    {
+      label: "權威頁面與內部連結",
+      weight: 15,
+      score: clampScore(confidenceAverage),
+    },
+    {
+      label: "技術 SEO 健康度",
+      weight: 15,
+      score: clampScore(actionCount ? 74 : 58),
+    },
+  ];
+
+  return {
+    label: "GEO visibility score",
+    items,
+    total: clampScore(
+      items.reduce((sum, item) => sum + item.score * (item.weight / 100), 0)
+    ),
+  };
+}
+
 export default function SiInsightPage({
   module,
   eyebrow,
@@ -74,6 +198,7 @@ export default function SiInsightPage({
   const tab = searchParams.get("tab") || "overview";
   const querySiteId = Number(searchParams.get("site_id") || DEFAULT_SITE_ID);
 
+  const [user, setUser] = useState<CurrentUser | null>(null);
   const [siteId, setSiteId] = useState(querySiteId || DEFAULT_SITE_ID);
   const [sites, setSites] = useState<SiSite[]>([]);
   const [summary, setSummary] = useState<SiSummary | null>(null);
@@ -81,10 +206,30 @@ export default function SiInsightPage({
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [errorText, setErrorText] = useState("");
+  const isDemo = Boolean(user?.isDemo);
 
   useEffect(() => {
     setSiteId(querySiteId || DEFAULT_SITE_ID);
   }, [querySiteId]);
+
+  useEffect(() => {
+    let alive = true;
+
+    fetch("/api/auth/me", { credentials: "include", cache: "no-store" })
+      .then((r) => r.json())
+      .then((res) => {
+        if (!alive) return;
+        setUser(res?.ok && res?.data?.id ? res.data : null);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setUser(null);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -129,6 +274,7 @@ export default function SiInsightPage({
   const loadSummary = useCallback(
     async (options?: { generate?: boolean }) => {
       if (!siteId || sites.length === 0) return;
+      if (options?.generate && isDemo) return;
 
       try {
         if (options?.generate) {
@@ -168,7 +314,7 @@ export default function SiInsightPage({
         setGenerating(false);
       }
     },
-    [module, siteId, sites.length, tab]
+    [isDemo, module, siteId, sites.length, tab]
   );
 
   useEffect(() => {
@@ -194,8 +340,33 @@ export default function SiInsightPage({
     return emptyTitle;
   }, [emptyTitle, summary?.title]);
 
+  const methodology = methodologyCopy(module);
+  const scoreBreakdown = useMemo(
+    () => (summary && hasData ? buildScoreBreakdown(module, summary) : null),
+    [hasData, module, summary]
+  );
+
   return (
     <div className="space-y-6">
+      <section className="rounded-lg border border-blue-100 bg-blue-50 p-5">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)] lg:items-center">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wider text-blue-700">
+              Methodology
+            </p>
+            <h1 className="mt-1 text-lg font-black text-slate-950">
+              {methodology.title}
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-slate-700">
+              {methodology.desc}
+            </p>
+          </div>
+          <div className="rounded-lg bg-white p-4 text-sm font-semibold leading-6 text-slate-600 ring-1 ring-blue-100">
+            {methodology.cadence}
+          </div>
+        </div>
+      </section>
+
       <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)] lg:items-start">
           <div className="min-w-0">
@@ -269,7 +440,7 @@ export default function SiInsightPage({
           <button
             type="button"
             onClick={() => loadSummary({ generate: true })}
-            disabled={generating}
+            disabled={generating || isDemo}
             className="mt-4 inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             {generating ? "產生中..." : "產生分析"}
@@ -279,6 +450,51 @@ export default function SiInsightPage({
 
       {!loadingSites && !loading && !errorText && hasData && summary && (
         <>
+          {scoreBreakdown && (
+            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider text-slate-400">
+                    Score
+                  </p>
+                  <h3 className="mt-1 text-lg font-black text-slate-950">
+                    {scoreBreakdown.label}
+                  </h3>
+                  <p className="mt-3 text-5xl font-black tracking-tight text-slate-950">
+                    {scoreBreakdown.total}
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-slate-500">
+                    MVP heuristic / 100
+                  </p>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  {scoreBreakdown.items.map((item) => (
+                    <div key={item.label} className="rounded-lg bg-slate-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-bold text-slate-700">
+                          {item.label}
+                        </p>
+                        <p className="text-sm font-black text-slate-950">
+                          {item.score}
+                        </p>
+                      </div>
+                      <div className="mt-3 h-2 rounded-full bg-white">
+                        <div
+                          className="h-2 rounded-full bg-blue-600"
+                          style={{ width: `${item.score}%` }}
+                        />
+                      </div>
+                      <p className="mt-2 text-xs font-semibold text-slate-400">
+                        Weight {item.weight}%
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
           <section className="grid gap-4 md:grid-cols-3">
             {summary.metrics.map((item) => (
               <div
@@ -449,7 +665,7 @@ export default function SiInsightPage({
               <button
                 type="button"
                 onClick={() => loadSummary({ generate: true })}
-                disabled={generating}
+                disabled={generating || isDemo}
                 className="mt-5 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {generating ? "更新中..." : "重新產生分析"}

@@ -8,11 +8,37 @@ import {
   TrendingUp,
   ShieldCheck,
   AlertTriangle,
+  Monitor,
+  Smartphone,
 } from "lucide-react";
 import type { SeoSite, SeoSummaryResponse } from "@/lib/seo/types";
 import AddSeoSiteDialog from "@/components/seo/AddSeoSiteDialog";
 
 type SummaryData = SeoSummaryResponse["data"];
+type PageSpeedStrategy = "mobile" | "desktop";
+type PageSpeedMetric = {
+  id: string;
+  label: string;
+  value: string;
+  numericValue: number | null;
+  score: number | null;
+  status: "good" | "average" | "poor" | "unknown";
+};
+type PageSpeedData = {
+  url: string;
+  strategy: PageSpeedStrategy;
+  score: number | null;
+  status: "good" | "average" | "poor" | "unknown";
+  metrics: PageSpeedMetric[];
+  fetchedAt: string;
+};
+type PageSpeedCache = Record<string, PageSpeedData>;
+type CurrentUser = {
+  id: number;
+  isDemo?: boolean;
+};
+
+const PAGESPEED_CACHE_KEY = "highlightsignal:seo:pagespeed-cache";
 
 const seoTabs = [
   { key: "overview", label: "SEO 總覽", href: "/si/seo" },
@@ -42,13 +68,40 @@ function getErrorMessage(json: any, fallback: string) {
   return json?.error?.message || json?.message || fallback;
 }
 
+function pageSpeedCacheKey(url: string, strategy: PageSpeedStrategy) {
+  return `${strategy}:${url.trim().toLowerCase()}`;
+}
+
+function readPageSpeedCache(): PageSpeedCache {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.sessionStorage.getItem(PAGESPEED_CACHE_KEY);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writePageSpeedCache(cache: PageSpeedCache) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.setItem(PAGESPEED_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Session cache is a convenience only; ignore storage failures.
+  }
+}
+
 export default function SeoPage() {
   const searchParams = useSearchParams();
   const rawTab = searchParams.get("tab") || "overview";
   const tab = rawTab === "issues" || rawTab === "ai" ? "technical" : rawTab;
 
-  const userId = 1; // 之後改成實際登入 user_id
-
+  const [user, setUser] = useState<CurrentUser | null>(null);
   const [sites, setSites] = useState<SeoSite[]>([]);
   const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
   const [summary, setSummary] = useState<SummaryData | null>(null);
@@ -57,6 +110,32 @@ export default function SeoPage() {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [errorText, setErrorText] = useState("");
+  const [pageSpeedStrategy, setPageSpeedStrategy] =
+    useState<PageSpeedStrategy>("mobile");
+  const [pageSpeed, setPageSpeed] = useState<PageSpeedData | null>(null);
+  const [pageSpeedCache, setPageSpeedCache] = useState<PageSpeedCache>({});
+  const [loadingPageSpeed, setLoadingPageSpeed] = useState(false);
+  const [pageSpeedError, setPageSpeedError] = useState("");
+  const isDemo = Boolean(user?.isDemo);
+
+  useEffect(() => {
+    let alive = true;
+
+    fetch("/api/auth/me", { credentials: "include", cache: "no-store" })
+      .then((r) => r.json())
+      .then((res) => {
+        if (!alive) return;
+        setUser(res?.ok && res?.data?.id ? res.data : null);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setUser(null);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const loadSites = useCallback(async () => {
     try {
@@ -65,9 +144,6 @@ export default function SeoPage() {
 
       const res = await fetch("/api/seo/sites", {
         method: "GET",
-        headers: {
-          "x-user-id": String(userId),
-        },
         cache: "no-store",
       });
 
@@ -89,10 +165,12 @@ export default function SeoPage() {
     } finally {
       setLoadingSites(false);
     }
-  }, [userId]);
+  }, []);
 
   const loadSummary = useCallback(
     async (siteId: number, options?: { force?: boolean }) => {
+      if (options?.force && isDemo) return;
+
       try {
         setLoadingSummary(true);
         setErrorText("");
@@ -103,7 +181,6 @@ export default function SeoPage() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            user_id: userId,
             site_id: siteId,
             force: Boolean(options?.force),
           }),
@@ -125,12 +202,16 @@ export default function SeoPage() {
         setLoadingSummary(false);
       }
     },
-    [userId]
+    [isDemo]
   );
 
   useEffect(() => {
     loadSites();
   }, [loadSites]);
+
+  useEffect(() => {
+    setPageSpeedCache(readPageSpeedCache());
+  }, []);
 
   useEffect(() => {
     if (selectedSiteId) {
@@ -141,6 +222,137 @@ export default function SeoPage() {
   const selectedSite = useMemo(() => {
     return sites.find((site) => site.id === selectedSiteId) || null;
   }, [sites, selectedSiteId]);
+
+  const loadPageSpeed = useCallback(
+    async (
+      url: string,
+      strategy: PageSpeedStrategy,
+      options?: { siteId?: number | null; refresh?: boolean }
+    ) => {
+      if (options?.refresh && isDemo) return;
+
+      try {
+        setLoadingPageSpeed(true);
+        setPageSpeedError("");
+
+        const res = await fetch("/api/seo/pagespeed", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            url,
+            strategy,
+            site_id: options?.siteId,
+            refresh: options?.refresh ?? true,
+          }),
+          cache: "no-store",
+        });
+
+        const json = await parseJsonSafe<{
+          ok: boolean;
+          data?: PageSpeedData;
+          error?: { message?: string };
+          message?: string;
+        }>(res);
+
+        if (!res.ok || !json.ok || !json.data) {
+          throw new Error(getErrorMessage(json, "PageSpeed 跑分失敗"));
+        }
+
+        setPageSpeed(json.data);
+        setPageSpeedCache((current) => {
+          const next = {
+            ...current,
+            [pageSpeedCacheKey(json.data!.url, json.data!.strategy)]: json.data!,
+          };
+          writePageSpeedCache(next);
+          return next;
+        });
+      } catch (error) {
+        setPageSpeedError(
+          error instanceof Error ? error.message : "PageSpeed 跑分失敗"
+        );
+      } finally {
+        setLoadingPageSpeed(false);
+      }
+    },
+    [isDemo]
+  );
+
+  const loadLatestPageSpeed = useCallback(
+    async (siteId: number, strategy: PageSpeedStrategy) => {
+      try {
+        setLoadingPageSpeed(true);
+        setPageSpeedError("");
+
+        const res = await fetch("/api/seo/pagespeed", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            site_id: siteId,
+            strategy,
+            cacheOnly: true,
+          }),
+          cache: "no-store",
+        });
+
+        const json = await parseJsonSafe<{
+          ok: boolean;
+          data?: PageSpeedData | null;
+          error?: { message?: string };
+          message?: string;
+        }>(res);
+
+        if (!res.ok || !json.ok) {
+          throw new Error(getErrorMessage(json, "讀取上次 PageSpeed 跑分失敗"));
+        }
+
+        setPageSpeed(json.data || null);
+
+        if (json.data) {
+          setPageSpeedCache((current) => {
+            const next = {
+              ...current,
+              [pageSpeedCacheKey(json.data!.url, json.data!.strategy)]: json.data!,
+            };
+            writePageSpeedCache(next);
+            return next;
+          });
+        }
+      } catch (error) {
+        setPageSpeed(null);
+        setPageSpeedError(
+          error instanceof Error ? error.message : "讀取上次 PageSpeed 跑分失敗"
+        );
+      } finally {
+        setLoadingPageSpeed(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    const url = selectedSite?.site_url;
+    const cached = url
+      ? pageSpeedCache[pageSpeedCacheKey(url, pageSpeedStrategy)]
+      : null;
+
+    setPageSpeed(cached || null);
+    setPageSpeedError("");
+
+    if (!cached && selectedSiteId) {
+      void loadLatestPageSpeed(selectedSiteId, pageSpeedStrategy);
+    }
+  }, [
+    loadLatestPageSpeed,
+    pageSpeedCache,
+    pageSpeedStrategy,
+    selectedSite?.site_url,
+    selectedSiteId,
+  ]);
 
   return (
     <>
@@ -187,7 +399,7 @@ export default function SeoPage() {
               onClick={() => {
                 if (selectedSiteId) loadSummary(selectedSiteId, { force: true });
               }}
-              disabled={!selectedSiteId || loadingSummary}
+              disabled={!selectedSiteId || loadingSummary || isDemo}
               className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <RefreshCw size={16} />
@@ -196,8 +408,11 @@ export default function SeoPage() {
 
             <button
               type="button"
-              onClick={() => setDialogOpen(true)}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
+              onClick={() => {
+                if (!isDemo) setDialogOpen(true);
+              }}
+              disabled={isDemo}
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
             >
               <Plus size={16} />
               新增連結
@@ -265,6 +480,23 @@ export default function SeoPage() {
                     icon={<AlertTriangle size={18} />}
                   />
                 </section>
+
+                <PageSpeedPanel
+                  data={pageSpeed}
+                  error={pageSpeedError}
+                  loading={loadingPageSpeed}
+                  strategy={pageSpeedStrategy}
+                  onStrategyChange={setPageSpeedStrategy}
+                  onRefresh={() => {
+                    if (selectedSite.site_url) {
+                      loadPageSpeed(selectedSite.site_url, pageSpeedStrategy, {
+                        siteId: selectedSiteId,
+                        refresh: true,
+                      });
+                    }
+                  }}
+                  disabled={isDemo}
+                />
 
                 {tab === "overview" && (
                   <section className="grid gap-6">
@@ -388,13 +620,224 @@ export default function SeoPage() {
       </div>
 
       <AddSeoSiteDialog
-        userId={userId}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onSuccess={loadSites}
       />
     </>
   );
+}
+
+function PageSpeedPanel({
+  data,
+  error,
+  loading,
+  strategy,
+  onStrategyChange,
+  onRefresh,
+  disabled = false,
+}: {
+  data: PageSpeedData | null;
+  error: string;
+  loading: boolean;
+  strategy: PageSpeedStrategy;
+  onStrategyChange: (strategy: PageSpeedStrategy) => void;
+  onRefresh: () => void;
+  disabled?: boolean;
+}) {
+  const score = data?.score ?? null;
+  const scoreTone = getScoreTone(score);
+  const circumference = 2 * Math.PI * 48;
+  const offset =
+    score === null ? circumference : circumference - (score / 100) * circumference;
+
+  return (
+    <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="text-sm font-medium text-slate-500">
+            網站速度檢測
+          </div>
+          <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-900">
+            SEO 效能跑分
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+            依照 Google Lighthouse 效能模型檢查載入速度、互動阻塞與版面穩定度。
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => onStrategyChange("mobile")}
+              className={[
+                "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition",
+                strategy === "mobile"
+                  ? "bg-white text-slate-950 shadow-sm"
+                  : "text-slate-500 hover:text-slate-900",
+              ].join(" ")}
+            >
+              <Smartphone size={16} />
+              行動裝置
+            </button>
+            <button
+              type="button"
+              onClick={() => onStrategyChange("desktop")}
+              className={[
+                "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition",
+                strategy === "desktop"
+                  ? "bg-white text-slate-950 shadow-sm"
+                  : "text-slate-500 hover:text-slate-900",
+              ].join(" ")}
+            >
+              <Monitor size={16} />
+              電腦
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading || disabled}
+            className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+            {data ? "重新跑分" : "開始跑分"}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)] xl:items-center">
+        <div className="flex flex-col items-center rounded-2xl bg-slate-50 p-5">
+          <div className="relative h-36 w-36">
+            <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
+              <circle
+                cx="60"
+                cy="60"
+                r="48"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="10"
+                className="text-slate-200"
+              />
+              <circle
+                cx="60"
+                cy="60"
+                r="48"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="10"
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={offset}
+                className={scoreTone.ring}
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className={`text-4xl font-bold ${scoreTone.text}`}>
+                {loading ? "..." : score ?? "-"}
+              </span>
+            </div>
+          </div>
+          <div className="mt-3 text-base font-semibold text-slate-900">
+            效能分數
+          </div>
+          <div className="mt-2 flex flex-wrap justify-center gap-3 text-xs font-semibold text-slate-500">
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+              0-49
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+              50-89
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              90-100
+            </span>
+          </div>
+        </div>
+
+        <div>
+          {error ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+              {error}
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 md:grid-cols-2">
+            {(data?.metrics || []).map((metric) => {
+              const tone = getMetricTone(metric.status);
+
+              return (
+                <div
+                  key={metric.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${tone.dot}`} />
+                      <span className="truncate text-sm font-semibold text-slate-700">
+                        {metric.label}
+                      </span>
+                    </div>
+                    <span className={`text-lg font-bold ${tone.text}`}>
+                      {metric.value}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {!loading && !error && !data ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">
+              尚未取得 PageSpeed 跑分。
+            </div>
+          ) : null}
+
+          {data?.fetchedAt ? (
+            <p className="mt-3 text-xs font-semibold text-slate-400">
+              最後檢查時間 {new Date(data.fetchedAt).toLocaleString()}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function getScoreTone(score: number | null) {
+  if (score === null) {
+    return { ring: "text-slate-300", text: "text-slate-400" };
+  }
+
+  if (score >= 90) {
+    return { ring: "text-emerald-500", text: "text-emerald-600" };
+  }
+
+  if (score >= 50) {
+    return { ring: "text-amber-500", text: "text-amber-600" };
+  }
+
+  return { ring: "text-rose-500", text: "text-rose-600" };
+}
+
+function getMetricTone(status: PageSpeedMetric["status"]) {
+  if (status === "good") {
+    return { dot: "bg-emerald-500", text: "text-emerald-700" };
+  }
+
+  if (status === "average") {
+    return { dot: "bg-amber-500", text: "text-amber-700" };
+  }
+
+  if (status === "poor") {
+    return { dot: "bg-rose-500", text: "text-rose-700" };
+  }
+
+  return { dot: "bg-slate-300", text: "text-slate-700" };
 }
 
 function ScoreCard({

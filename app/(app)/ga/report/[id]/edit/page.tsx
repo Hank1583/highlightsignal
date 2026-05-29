@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useGAConnections } from "../../../dataSource";
+import { useCurrentUser, useGAConnections } from "../../../dataSource";
 import { useGaReportDetail, useGaReportUpdate } from "../../../dataSource";
 
 const sectionOptions = [
@@ -18,8 +18,10 @@ export default function ReportEditPage() {
   const id = Number(params.id);
 
   const { gaConnections, loading: gaLoading, error: gaError } = useGAConnections();
+  const { user } = useCurrentUser();
   const { reportDetail, loading, error } = useGaReportDetail(id);
   const { updateReport, saving, error: updateError } = useGaReportUpdate();
+  const isDemo = Boolean(user?.isDemo);
 
   const [form, setForm] = useState({
     report_name: "",
@@ -84,6 +86,11 @@ export default function ReportEditPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isDemo) {
+      alert("Demo 帳號僅供檢視，無法編輯報表。");
+      return;
+    }
+
     const payload = {
       ...form,
       report_name: form.report_name.trim(),
@@ -145,6 +152,14 @@ export default function ReportEditPage() {
         onSubmit={handleSubmit}
         className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6"
       >
+        {isDemo && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+            Demo 帳號僅供檢視，無法編輯、刪除或停用報表。
+          </div>
+        )}
+
+        <fieldset disabled={isDemo || saving} className="space-y-6 disabled:opacity-70">
+
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -358,6 +373,8 @@ export default function ReportEditPage() {
           <span className="text-sm text-slate-700">啟用此報表</span>
         </label>
 
+        </fieldset>
+
         {updateError && (
           <div className="text-sm text-red-500">{updateError}</div>
         )}
@@ -371,7 +388,7 @@ export default function ReportEditPage() {
           </a>
           <button
             type="submit"
-            disabled={saving}
+            disabled={isDemo || saving}
             className="rounded-xl bg-slate-900 px-4 py-2 text-white disabled:opacity-50"
           >
             {saving ? "更新中..." : "更新"}

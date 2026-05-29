@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import PageHeader from "@/components/ga/PageHeader";
 import SectionCard from "@/components/ga/SectionCard";
 import { highlightPhpApiUrl } from "@/lib/config";
-import { useGaReportList, type GaReportRow } from "../dataSource";
+import { useCurrentUser, useGaReportList, type GaReportRow } from "../dataSource";
 
 const weekdayMap: Record<number, string> = {
   1: "週一",
@@ -59,6 +59,8 @@ function getPreviousMonthRange() {
 
 export default function ReportPage() {
   const { reportList, loading, error } = useGaReportList();
+  const { user } = useCurrentUser();
+  const isDemo = Boolean(user?.isDemo);
 
   const [selectedRow, setSelectedRow] = useState<GaReportRow | null>(null);
   const [sendType, setSendType] = useState<SendType>("weekly");
@@ -104,6 +106,8 @@ export default function ReportPage() {
   }, [selectedRow, resolvedRange, sendType]);
 
   const openSendModal = (row: GaReportRow) => {
+    if (isDemo) return;
+
     setSelectedRow(row);
     setSendType("weekly");
     setCustomStart("");
@@ -118,6 +122,11 @@ export default function ReportPage() {
   };
 
   const handleSend = async () => {
+    if (isDemo) {
+      setSubmitMessage("Demo 帳號僅供檢視，無法立即寄送報表。");
+      return;
+    }
+
     if (!selectedRow) return;
 
     if (!resolvedRange.start || !resolvedRange.end) {
@@ -145,7 +154,6 @@ export default function ReportPage() {
       }
 
       setSubmitMessage("寄送成功");
-      console.log("report_mailer response:", text);
     } catch (err: any) {
       setSubmitMessage(err?.message || "寄送失敗，請稍後再試");
     } finally {
@@ -161,12 +169,22 @@ export default function ReportPage() {
       />
 
       <div className="flex justify-end">
-        <a
-          href="/ga/report/create"
-          className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-        >
-          新增報表
-        </a>
+        {isDemo ? (
+          <button
+            type="button"
+            disabled
+            className="cursor-not-allowed rounded-2xl bg-slate-200 px-4 py-2 text-sm font-medium text-slate-500"
+          >
+            新增報表
+          </button>
+        ) : (
+          <a
+            href="/ga/report/create"
+            className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+          >
+            新增報表
+          </a>
+        )}
       </div>
 
       <SectionCard title="排程清單">
@@ -233,33 +251,54 @@ export default function ReportPage() {
 
                   <div className="text-slate-600">{getScheduleText(row)}</div>
 
-                  <div className="truncate text-slate-600" title={row.email_list?.join("、")}>
-                    {getEmailText(row.email_list)}
+                  <div
+                    className="truncate text-slate-600"
+                    title={isDemo ? undefined : row.email_list?.join("、")}
+                  >
+                    {isDemo ? "-" : getEmailText(row.email_list)}
                   </div>
 
                   <div className="md:text-center">
                     <button
                       type="button"
                       onClick={() => openSendModal(row)}
-                      className="rounded-xl border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                      disabled={isDemo}
+                      className={[
+                        "rounded-xl border px-3 py-1.5 text-sm font-medium transition",
+                        isDemo
+                          ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                          : "border-slate-300 text-slate-700 hover:bg-slate-50",
+                      ].join(" ")}
                     >
                       立即寄送
                     </button>
                   </div>
 
                   <div className="md:text-center">
-                    <a
-                      href={`/ga/report/${row.id}/edit`}
-                      className="text-sm font-medium text-blue-600 hover:text-blue-700"
-                    >
-                      編輯
-                    </a>
+                    {isDemo ? (
+                      <span className="text-sm font-medium text-slate-400">
+                        編輯
+                      </span>
+                    ) : (
+                      <a
+                        href={`/ga/report/${row.id}/edit`}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        編輯
+                      </a>
+                    )}
                   </div>
 
                   <div className="md:text-center">
                     <button
                       type="button"
-                      className="text-sm font-medium text-rose-600 hover:text-rose-700"
+                      disabled={isDemo}
+                      className={[
+                        "text-sm font-medium",
+                        isDemo
+                          ? "cursor-not-allowed text-slate-400"
+                          : "text-rose-600 hover:text-rose-700",
+                      ].join(" ")}
                     >
                       刪除
                     </button>

@@ -30,7 +30,7 @@ const products = [
     href: "/si",
     tag: "SEO / AEO / GEO",
     description:
-      "把 SEO 技術檢查、AEO 問題機會與 GEO AI 可見度放在同一個工作台，協助品牌規劃可被搜尋與 AI 引用的內容。",
+      "分析網站在 Google 與 AI 搜尋中的可見度，找出 SEO、AEO 與 GEO 優化機會。",
     icon: Search,
     color: "text-emerald-700",
     bg: "bg-emerald-50",
@@ -142,12 +142,11 @@ export default function LandingPage() {
             </div>
 
             <h1 className="mt-5 max-w-3xl text-3xl font-black leading-tight tracking-normal text-zinc-950 sm:text-4xl md:text-3xl">
-              Highlight Signal 幫品牌看懂流量、搜尋與 AI 曝光機會
+              Highlight Signal 幫品牌分析 SEO、AI 搜尋與流量成長機會
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-700 sm:text-lg md:mt-6 md:leading-8">
-              Highlight Signal 是給行銷與成長團隊使用的分析平台，整合 GA4、SEO、AEO
-              與 GEO 訊號，把網站流量、關鍵字、內容缺口與 AI 引用機會轉成清楚的優化待辦。
+              整合 GA4、SEO、AEO 與 GEO 訊號，協助品牌找出搜尋問題、內容缺口與 AI 引用機會。
             </p>
 
             <div className="mt-7 flex flex-col gap-3 sm:mt-9 sm:flex-row">
@@ -155,7 +154,7 @@ export default function LandingPage() {
                 href="/enter"
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-950 px-5 py-3.5 text-base font-bold text-white shadow-lg shadow-zinc-950/15 transition hover:bg-zinc-800 sm:w-auto sm:px-6 sm:py-4"
               >
-                進入系統
+                開始 AI 搜尋分析
                 <ArrowRight size={18} />
               </Link>
 
@@ -163,7 +162,7 @@ export default function LandingPage() {
                 href="#products"
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-5 py-3.5 text-base font-bold text-zinc-900 transition hover:border-zinc-950 sm:w-auto sm:px-6 sm:py-4"
               >
-                查看核心功能
+                查看分析能力
                 <FileSearch size={18} />
               </Link>
             </div>
@@ -174,6 +173,9 @@ export default function LandingPage() {
               <div>
                 <p className="text-sm font-semibold text-zinc-500">Today overview</p>
                 <p className="text-2xl font-black text-zinc-950">Growth Signal</p>
+                <p className="mt-1 text-sm font-medium text-zinc-500">
+                  Monitor how AI search engines understand your website.
+                </p>
               </div>
               <div className="shrink-0 rounded-lg bg-amber-100 p-3 text-amber-700">
                 <Sparkles size={24} />
@@ -221,8 +223,7 @@ export default function LandingPage() {
       <section className="px-4 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <p className="max-w-3xl text-base leading-7 text-zinc-700">
-            短答案：Highlight Signal
-            協助品牌把流量分析、搜尋優化與 AI 可見度檢查整合成一套決策流程，適合想提升自然搜尋、內容品質、轉換效率與 AI 搜尋曝光的團隊。
+            Highlight Signal 協助品牌分析 SEO、搜尋流量與 AI 可見度，建立可持續優化的搜尋成長流程。
           </p>
         </div>
       </section>
@@ -339,6 +340,58 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section className="px-4 py-14 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl rounded-lg border border-zinc-200 bg-white p-8">
+          <p className="text-sm font-black uppercase tracking-[0.18em] text-emerald-700">
+            Contact
+          </p>
+          <h2 className="mt-3 text-3xl font-black text-zinc-950">
+            想了解產品、合作或網站分析？
+          </h2>
+          <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-600">
+            歡迎直接聯絡 Hank，討論產品 Demo、網站 AI 可見度分析、SEO 顧問合作、系統整合或品牌搜尋成長規劃。
+          </p>
+          <div className="mt-8 flex flex-col gap-3">
+            <a
+              href="mailto:hank.highlight@gmail.com"
+              className="text-lg font-bold text-zinc-950 hover:text-emerald-700"
+            >
+              hank.highlight@gmail.com
+            </a>
+            <a
+              href="https://line.me/R/ti/p/@306rtpqm"
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm font-semibold text-zinc-600 hover:text-zinc-950"
+            >
+              LINE ID @306rtpqm
+            </a>
+            <a
+              href="https://www.highlight.url.tw/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm font-semibold text-zinc-600 hover:text-zinc-950"
+            >
+              公司官網：亮點數位 Highlight Digital
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="px-4 py-14 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl rounded-lg bg-[#f6f8f5] p-8">
+          <p className="text-sm font-black uppercase tracking-[0.18em] text-emerald-700">
+            About
+          </p>
+          <h2 className="mt-3 text-2xl font-black text-zinc-950">
+            由亮點數位團隊打造
+          </h2>
+          <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-600">
+            Highlight Signal 延伸亮點數位在 AI、Web、資料平台與數位產品開發的經驗，專注在 AI 可見度、SEO intelligence 與搜尋流量分析，協助台灣品牌面對 Google、AI 搜尋與答案型平台帶來的新搜尋環境。
+          </p>
+        </div>
+      </section>
+
       <section className="px-4 pb-14 sm:px-6 sm:pb-20 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 rounded-lg bg-zinc-950 p-6 text-white sm:p-8 md:flex-row md:items-center md:p-10">
           <div>
@@ -347,18 +400,43 @@ export default function LandingPage() {
               Ready for better signals
             </p>
             <h2 className="mt-2 max-w-3xl text-2xl font-black leading-tight tracking-normal sm:text-3xl">
-              先從首頁與核心服務頁補齊搜尋引擎和 AI 都看得懂的內容。
+              開始檢查網站 AI 可見度，找出下一個搜尋成長機會。
             </h2>
           </div>
           <Link
             href="/enter"
             className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-5 py-3.5 font-black text-zinc-950 transition hover:bg-emerald-100 sm:w-auto sm:px-6 sm:py-4"
           >
-            登入 / 註冊
+            開始 AI 搜尋分析
             <ArrowRight size={18} />
           </Link>
         </div>
       </section>
+
+      <footer className="border-t border-zinc-200 px-4 py-8 text-sm text-zinc-500">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p>© 2026 Highlight Signal</p>
+          <div className="flex items-center gap-4">
+            <Link href="/privacy" className="hover:text-zinc-950">
+              Privacy
+            </Link>
+            <Link href="/terms" className="hover:text-zinc-950">
+              Terms
+            </Link>
+            <a href="mailto:hank.highlight@gmail.com" className="hover:text-zinc-950">
+              Contact
+            </a>
+            <a
+              href="https://www.highlight.url.tw/"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-zinc-950"
+            >
+              Company
+            </a>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }

@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Highlight Signal
 
-## Getting Started
+Highlight Signal is a Next.js app for GA analytics, Search Intelligence, and AI dashboard workflows. The frontend talks to the existing Highlight PHP APIs for authentication, GA data, SEO/SI summaries, and dashboard AI composition.
 
-First, run the development server:
+## Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Required Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Copy `.env.example` to `.env.local` for local development.
 
-## Learn More
+- `JWT_SECRET`: Required in production. Use a long random value.
+- `NEXT_PUBLIC_BASE_URL`: Public frontend URL.
+- `NEXT_PUBLIC_HIGHLIGHT_PHP_API_BASE_URL`: Base URL for PHP APIs, without a trailing slash.
+- `NEXT_PUBLIC_HIGHLIGHT_UPGRADE_URL`: Official plan or checkout URL used by upgrade links.
+- `API_DOMAIN`: Legacy auth API domain.
 
-To learn more about Next.js, take a look at the following resources:
+## Production Checklist
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Before release:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Run `npm run lint`.
+- Run `npx tsc --noEmit --pretty false`.
+- Run `npm run build`.
+- Confirm production has `JWT_SECRET`.
+- Confirm login sets the `token` cookie with `HttpOnly`, `Secure`, `SameSite=Lax`, and `Path=/`.
+- Confirm `/api/auth/logout` clears the `token` cookie.
+- Confirm protected routes redirect anonymous users to `/auth/login`.
+- Confirm `enabledProducts` gates GA and Search Intelligence routes correctly.
+- Confirm `NEXT_PUBLIC_HIGHLIGHT_UPGRADE_URL` points to the current official plan or payment page.
 
-## Deploy on Vercel
+## PHP Backend
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The PHP source of truth is maintained outside this Next.js app:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```text
+D:\7.Highlight\1.Project\4.php\highlightsignal
+```
+
+This web repository should not keep a duplicate `backend/` folder. Frontend API calls are routed through:
+
+```text
+NEXT_PUBLIC_HIGHLIGHT_PHP_API_BASE_URL=https://www.highlight.url.tw/highlightsignal
+```
+
+Relevant PHP paths in the PHP project:
+
+- `ga/*`
+- `si/*`
+- `dashboard/ai_plan.php`
+- `dashboard/ai_compose.php`
+- `dashboard/ai_usage.php`
+- `sql/si/*`
+- `sql/dashboard/dashboard_ai_logs.sql`
+
+`dashboard/ai_usage.php` uses `dashboard_ai_logs` to enforce the daily Dashboard AI quota. The current frontend quota policy is:
+
+- Free or unknown subscription: 3 asks per day
+- Basic/member: 20 asks per day
+- Pro: 100 asks per day
+- Admin: 500 asks per day
+
+Smoke test the PHP endpoints after deployment because this repository does not include a local PHP runtime.
+
+## Release Scope
+
+Current release scope:
+
+- Dashboard
+- GA analytics
+- Search Intelligence / SEO
+- AEO / GEO MVP
+- Product subscription status and upgrade entry points
+
+Out of scope for this app:
+
+- Billing checkout and payment management
+- CRM
+- Salesbot
+- Full ADS implementation

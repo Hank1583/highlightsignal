@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useGAConnections } from "../../dataSource";
+import { useCurrentUser, useGAConnections } from "../../dataSource";
 import { useGaReportSave } from "../../dataSource";
 
 const sectionOptions = [
@@ -13,7 +13,9 @@ const sectionOptions = [
 
 export default function ReportCreatePage() {
   const { gaConnections, loading, error } = useGAConnections();
+  const { user } = useCurrentUser();
   const { saveReport, saving, error: saveError } = useGaReportSave();
+  const isDemo = Boolean(user?.isDemo);
   const [form, setForm] = useState({
     report_name: "",
     report_type: "weekly",
@@ -54,6 +56,11 @@ export default function ReportCreatePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isDemo) {
+      alert("Demo 帳號僅供檢視，無法新增報表。");
+      return;
+    }
+
     const payload = {
       ...form,
       report_name: form.report_name.trim(),
@@ -63,8 +70,6 @@ export default function ReportCreatePage() {
       send_monthday: Number(form.send_monthday),
       email_list: form.email_list.map((email) => email.trim()).filter(Boolean),
     };
-
-    console.log("submit payload =", payload);
 
     if (!payload.report_name) {
       alert("請輸入報表名稱");
@@ -108,6 +113,20 @@ export default function ReportCreatePage() {
         onSubmit={handleSubmit}
         className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6"
       >
+        {saveError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {saveError}
+          </div>
+        )}
+
+        {isDemo && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+            Demo 帳號僅供檢視，無法新增報表。
+          </div>
+        )}
+
+        <fieldset disabled={isDemo || saving} className="space-y-6 disabled:opacity-70">
+
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -321,6 +340,8 @@ export default function ReportCreatePage() {
           <span className="text-sm text-slate-700">啟用此報表</span>
         </label>
 
+        </fieldset>
+
         <div className="flex justify-end gap-3">
           <a
             href="/ga/report"
@@ -330,7 +351,7 @@ export default function ReportCreatePage() {
           </a>
           <button
             type="submit"
-            disabled={saving}
+            disabled={isDemo || saving}
             className="rounded-xl bg-slate-900 px-4 py-2 text-white disabled:opacity-50"
           >
             {saving ? "儲存中..." : "儲存"}

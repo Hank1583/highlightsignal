@@ -10,6 +10,7 @@ type Props = {
   user?: {
     name?: string;
     email?: string;
+    isDemo?: boolean;
   };
 };
 
@@ -46,6 +47,12 @@ export default function AppHeader({
           <div className="h-6 w-px bg-slate-200" />
 
           <ProductSelect enabledProducts={enabledProducts} />
+
+          {user?.isDemo && (
+            <span className="hidden rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 sm:inline-flex">
+              Demo 唯讀
+            </span>
+          )}
         </div>
 
         <UserMenu user={user} />

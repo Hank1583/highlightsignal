@@ -1,8 +1,10 @@
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT } from "jose";
+import { getJwtSecret } from "@/lib/jwtSecret";
+import { isDemoEmail } from "@/lib/demo";
+import { normalizeEnabledProducts } from "@/lib/products";
+import { verifyAnyToken } from "@/lib/sessionToken";
 
-const secret = new TextEncoder().encode(
-  process.env.JWT_SECRET || "dev-secret-change-me"
-);
+const secret = getJwtSecret();
 
 // 建立 JWT
 export async function signToken(payload: Record<string, any>) {
@@ -19,13 +21,19 @@ export async function verifyToken(
   token: string
 ): Promise<JWTPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const payload = await verifyAnyToken([token], secret);
+
+    if (!payload) {
+      return null;
+    }
 
     return {
       id: Number(payload.id),
       email: String(payload.email),
       name: payload.name ? String(payload.name) : undefined,
       role: payload.role ? String(payload.role) : undefined,
+      enabledProducts: normalizeEnabledProducts(payload.enabledProducts),
+      isDemo: Boolean(payload.isDemo) || isDemoEmail(payload.email),
     };
   } catch {
     return null;
@@ -38,5 +46,7 @@ export interface JWTPayload {
   email: string;
   name?: string;
   role?: string;
+  enabledProducts?: string[];
+  isDemo?: boolean;
 }
 

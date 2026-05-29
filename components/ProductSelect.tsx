@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BarChart3, LayoutDashboard, Megaphone, Search } from "lucide-react";
-
-export type ProductKey = "dashboard" | "ga" | "si" | "ads";
+import { normalizeEnabledProducts, type ProductKey } from "@/lib/products";
 
 const products: {
   key: ProductKey;
@@ -29,18 +28,7 @@ export default function ProductSelect({ enabledProducts = ["dashboard"] }: Props
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const normalizedProducts = useMemo(() => {
-    const validKeys = new Set(products.map((product) => product.key));
-    const safeEnabledProducts = Array.isArray(enabledProducts)
-      ? enabledProducts.map((key) => (key === "seo" ? "si" : key))
-      : ["dashboard"];
-
-    return Array.from(
-      new Set(
-        ["dashboard", ...safeEnabledProducts].filter((key): key is ProductKey =>
-          validKeys.has(key as ProductKey)
-        )
-      )
-    );
+    return normalizeEnabledProducts(enabledProducts);
   }, [enabledProducts]);
 
   const availableProducts = useMemo(() => {

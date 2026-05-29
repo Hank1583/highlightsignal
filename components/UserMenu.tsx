@@ -7,6 +7,7 @@ type Props = {
   user?: {
     name?: string;
     email?: string;
+    isDemo?: boolean;
   };
 };
 
@@ -19,6 +20,7 @@ export default function UserMenu({ user }: Props) {
   const safeUser = {
     name: user?.name || "User",
     email: user?.email || "",
+    isDemo: Boolean(user?.isDemo),
   };
 
   useEffect(() => {
@@ -47,9 +49,10 @@ export default function UserMenu({ user }: Props) {
     try {
       setLoggingOut(true);
 
-      document.cookie =
-        "token=; Path=/; Max-Age=0; SameSite=Lax" +
-        (window.location.protocol === "https:" ? "; Secure" : "");
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
 
       router.replace("/auth/login");
       router.refresh();
@@ -85,6 +88,11 @@ export default function UserMenu({ user }: Props) {
               {safeUser.name}
             </div>
             <div className="text-xs text-slate-500">{safeUser.email}</div>
+            {safeUser.isDemo && (
+              <div className="mt-2 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                Demo 帳號僅供檢視
+              </div>
+            )}
           </div>
 
           <div className="py-2 text-sm">

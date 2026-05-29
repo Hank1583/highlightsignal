@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify } from "jose";
+import { getJwtSecret } from "@/lib/jwtSecret";
+import { hasProductAccess } from "@/lib/products";
+import { clearTokenCookie, verifyAnyToken } from "@/lib/sessionToken";
 
-const key = new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret-change-me");
+const key = getJwtSecret();
 
 const protectedPrefixes = [
   "/dashboard",
@@ -11,9 +13,6 @@ const protectedPrefixes = [
   "/ads",
   "/account",
   "/team",
-  "/billing",
-  "/support",
-  "/member",
   "/admin",
 ];
 
@@ -21,7 +20,6 @@ const routePermissionMap: Record<string, string> = {
   "/ga": "ga",
   "/si": "si",
   "/seo": "si",
-  "/ads": "ads",
 };
 
 function isProtectedPath(pathname: string) {
@@ -40,28 +38,28 @@ function getRequiredProduct(pathname: string) {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  console.log("middleware pathname =", pathname);
 
   if (!isProtectedPath(pathname)) {
-    console.log("not protected");
     return NextResponse.next();
   }
 
-  const token = req.cookies.get("token")?.value;
-  console.log("token exists =", !!token);
+  const tokens = req.cookies.getAll("token").map((cookie) => cookie.value);
 
-  if (!token) {
-    console.log("no token, redirect login");
+  if (tokens.length === 0) {
     return NextResponse.redirect(new URL("/auth/login", req.url));
   }
 
   try {
-    const { payload } = await jwtVerify(token, key);
-    console.log("jwt ok payload =", payload);
+    const payload = await verifyAnyToken(tokens, key);
+
+    if (!payload) {
+      return clearTokenCookie(
+        NextResponse.redirect(new URL("/auth/login", req.url))
+      );
+    }
 
     if (pathname === "/admin" || pathname.startsWith("/admin/")) {
       if (payload.role !== "admin") {
-        console.log("not admin");
         return NextResponse.redirect(new URL("/dashboard", req.url));
       }
     }
@@ -69,29 +67,16 @@ export async function middleware(req: NextRequest) {
     const requiredProduct = getRequiredProduct(pathname);
 
     if (requiredProduct) {
-      const enabledProducts = Array.isArray(payload.enabledProducts)
-        ? payload.enabledProducts
-        : [];
-
-      console.log("requiredProduct =", requiredProduct);
-      console.log("enabledProducts =", enabledProducts);
-
-      const hasRequiredProduct =
-        enabledProducts.includes(requiredProduct) ||
-        (requiredProduct === "si" && enabledProducts.includes("seo"));
-
-      if (!hasRequiredProduct) {
-        console.log("product not enabled");
+      if (!hasProductAccess(payload.enabledProducts, requiredProduct as "ga" | "si" | "ads")) {
         return NextResponse.redirect(new URL("/dashboard", req.url));
       }
     }
 
     return NextResponse.next();
-  } catch (err) {
-    console.log("jwt verify failed =", err);
-    const response = NextResponse.redirect(new URL("/auth/login", req.url));
-    response.cookies.delete("token");
-    return response;
+  } catch {
+    return clearTokenCookie(
+      NextResponse.redirect(new URL("/auth/login", req.url))
+    );
   }
 }
 
@@ -111,12 +96,6 @@ export const config = {
     "/account",
     "/team/:path*",
     "/team",
-    "/billing/:path*",
-    "/billing",
-    "/support/:path*",
-    "/support",
-    "/member/:path*",
-    "/member",
     "/admin/:path*",
     "/admin",
   ],

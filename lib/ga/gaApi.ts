@@ -127,7 +127,6 @@ export async function getGaReportDetail(user_id: number,id: number){
   });
 
   const result = await res.json();
-    console.log(result);
   if (!res.ok) {
     throw new Error(result?.message || "讀取報表失敗");
   }

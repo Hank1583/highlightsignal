@@ -2,28 +2,16 @@ export const runtime = "edge";
 
 import { NextResponse } from "next/server";
 import { SignJWT } from "jose";
+import { getJwtSecret } from "@/lib/jwtSecret";
+import { DEMO_EMAIL, getDemoMemberId, isDemoEmail } from "@/lib/demo";
+import {
+  normalizeEnabledProducts,
+  type ProductKey,
+} from "@/lib/products";
 
 type SubscribedApp = {
   app_id: string;
   expire_at: string;
-};
-
-type ProductKey =
-  | "dashboard"
-  | "ga"
-  | "si"
-  | "support"
-  | "crm"
-  | "ads"
-  | "salesbot";
-
-const appIdMap: Record<string, ProductKey | undefined> = {
-  "highlightsignal-dashboard": "dashboard",
-  "highlightsignal-ga": "ga",
-  "highlightsignal-si": "si",
-  "highlightsignal-seo": "si",
-  "highlightsignal-ads": "ads",
-  "highlightsignal-support": "support"
 };
 
 async function signToken(payload: {
@@ -42,9 +30,9 @@ async function signToken(payload: {
   ip?: string | null;
   avatar?: string | null;
   loginAt?: string | null;
+  isDemo?: boolean;
 }) {
-  const secret = process.env.JWT_SECRET || "dev-secret-change-me";
-  const key = new TextEncoder().encode(secret);
+  const key = getJwtSecret();
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -72,6 +60,55 @@ function nullableNumber(value: unknown) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const email = String(body?.email || "").trim().toLowerCase();
+
+    if (isDemoEmail(email)) {
+      const demoToken = await signToken({
+        id: getDemoMemberId(),
+        email: DEMO_EMAIL,
+        name: "Highlight Demo",
+        role: "viewer",
+        subscription: "demo",
+        enabledProducts: ["dashboard", "ga", "si"],
+        subscribedApps: [
+          { app_id: "highlightsignal-ga", expire_at: "2099-12-31" },
+          { app_id: "highlightsignal-si", expire_at: "2099-12-31" },
+        ],
+        expireDate: "2099-12-31",
+        daysLeft: null,
+        loginAt: new Date().toISOString().slice(0, 19).replace("T", " "),
+        isDemo: true,
+      });
+
+      const res = NextResponse.json({
+        ok: true,
+        user: {
+          id: getDemoMemberId(),
+          email: DEMO_EMAIL,
+          name: "Highlight Demo",
+          role: "viewer",
+          subscription: "demo",
+          expire_date: "2099-12-31",
+          days_left: null,
+          subscribed_apps: [
+            { app_id: "highlightsignal-ga", expire_at: "2099-12-31" },
+            { app_id: "highlightsignal-si", expire_at: "2099-12-31" },
+          ],
+          enabledProducts: ["dashboard", "ga", "si"],
+          isDemo: true,
+        },
+      });
+
+      res.cookies.set("token", demoToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7,
+      });
+
+      return res;
+    }
 
     const form = new URLSearchParams();
     for (const [k, v] of Object.entries(body)) {
@@ -121,14 +158,14 @@ export async function POST(req: Request) {
       })
       .filter((item: SubscribedApp) => item.app_id);
 
-    const enabledProducts = Array.from(
-      new Set<ProductKey>([
-        "dashboard",
-        ...subscribedApps
-          .map((item) => appIdMap[item.app_id])
-          .filter(Boolean) as ProductKey[],
-      ])
-    );
+    const rawEnabledProducts = [
+      ...subscribedApps.map((item) => item.app_id),
+      data.app_id,
+      data.subscription,
+      ...(Array.isArray(data.enabled_products) ? data.enabled_products : []),
+    ];
+
+    const enabledProducts = normalizeEnabledProducts(rawEnabledProducts);
     // console.log("subscribedApps =", subscribedApps);
     // console.log("enabledProducts =", enabledProducts);
     // console.log("token payload =", {
@@ -143,7 +180,7 @@ export async function POST(req: Request) {
       email: String(data.email || ""),
       name: String(data.name || ""),
       appId: data.app_id ? String(data.app_id) : undefined,
-      role: data.subscription ? String(data.subscription) : undefined,
+      role: data.role ? String(data.role) : undefined,
       subscription: data.subscription ? String(data.subscription) : undefined,
       enabledProducts,
       subscribedApps,
@@ -163,6 +200,7 @@ export async function POST(req: Request) {
         email: data.email,
         name: data.name,
         app_id: data.app_id,
+        role: data.role,
         subscription: data.subscription,
         expire_date: data.expire_date,
         days_left: data.days_left,
