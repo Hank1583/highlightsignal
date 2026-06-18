@@ -4,8 +4,6 @@ import { getJwtSecret } from "@/lib/jwtSecret";
 
 export const runtime = "edge";
 
-const key = getJwtSecret();
-
 export async function GET(req: NextRequest) {
   const token = req.cookies.get("token")?.value;
 
@@ -14,6 +12,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const key = getJwtSecret();
     await jwtVerify(token, key);
     return NextResponse.redirect(new URL("/dashboard", req.url));
   } catch {

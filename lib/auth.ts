@@ -4,10 +4,9 @@ import { isDemoEmail } from "@/lib/demo";
 import { normalizeEnabledProducts } from "@/lib/products";
 import { verifyAnyToken } from "@/lib/sessionToken";
 
-const secret = getJwtSecret();
-
 // 建立 JWT
 export async function signToken(payload: Record<string, any>) {
+  const secret = getJwtSecret();
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -21,6 +20,7 @@ export async function verifyToken(
   token: string
 ): Promise<JWTPayload | null> {
   try {
+    const secret = getJwtSecret();
     const payload = await verifyAnyToken([token], secret);
 
     if (!payload) {

@@ -1,0 +1,105 @@
+{
+    "wallTime": 71,
+    "cpuTime": 71,
+    "truncated": false,
+    "executionModel": "stateless",
+    "outcome": "ok",
+    "scriptVersion": {
+        "id": "e45230b5-571e-4469-b1e8-250c8d0bc3dd"
+    },
+    "scriptName": "highlightsignal",
+    "diagnosticsChannelEvents": [],
+    "exceptions": [],
+    "logs": [
+        {
+            "message": [
+                "⨯",
+                "TypeError: Cannot read properties of undefined (reading 'default')"
+            ],
+            "level": "error",
+            "timestamp": 1781775366544
+        }
+    ],
+    "eventTimestamp": 1781775366346,
+    "event": {
+        "request": {
+            "url": "https://highlightsignal.jouchanghung-0e5.workers.dev/enter",
+            "method": "GET",
+            "headers": {
+                "accept-encoding": "gzip, br",
+                "cf-connecting-ip": "118.163.109.212",
+                "cf-ipcountry": "TW",
+                "cf-ray": "a0d94ec798aefd27",
+                "cf-visitor": "{\"scheme\":\"https\"}",
+                "connection": "Keep-Alive",
+                "host": "highlightsignal.jouchanghung-0e5.workers.dev",
+                "user-agent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; zh-TW) WindowsPowerShell/5.1.26100.8655",
+                "x-forwarded-proto": "https",
+                "x-real-ip": "118.163.109.212"
+            },
+            "cf": {
+                "httpProtocol": "HTTP/1.1",
+                "requestPriority": "",
+                "edgeRequestKeepAliveStatus": 1,
+                "requestHeaderNames": {},
+                "clientTcpRtt": 64,
+                "clientQuicRtt": 0,
+                "colo": "SIN",
+                "asn": 3462,
+                "asOrganization": "Chunghwa Telecom Data Communication Business Group",
+                "country": "TW",
+                "isEUCountry": false,
+                "city": "Taipei",
+                "continent": "AS",
+                "region": "Taiwan",
+                "regionCode": "04",
+                "timezone": "Asia/Taipei",
+                "longitude": "121.52639",
+                "latitude": "25.05306",
+                "tlsVersion": "TLSv1.3",
+                "tlsCipher": "AEAD-AES256-GCM-SHA384",
+                "tlsClientRandom": "T5VDXKz604900v3yvGwTlFDkPpv0oy7eNv6XqyQ4VU4=",
+                "tlsClientCiphersSha1": "kTkJ+HAwBvIuoPFncb1wEDLcgfg=",
+                "tlsClientExtensionsSha1": "Bxwn0Bs0z+5dY69ZcqleTRGmlpE=",
+                "tlsClientExtensionsSha1Le": "sb2ftGg4/laBHA9Q/MJ4X/0+cJY=",
+                "tlsExportedAuthenticator": {
+                    "clientHandshake": "8092c5b9f6d605eb00eabe09ae521c4bab3fc59d6c4dc0035d0bb7b6ef305305580f695d5aad79c6ef1e39df7e08a149",
+                    "serverHandshake": "5a7b51549448839ac6ad812e12646554a0beac98273f1f583eb9c75c8fdbdf6b10e245a0575f161c78d0bc30919b47c8",
+                    "clientFinished": "2871fe186e1b1707916c21863f7179f83f181d2a1eb84f090b5deb47f4f94215d59bee9cdf350dc30829e6293d760127",
+                    "serverFinished": "f0a9b7cf1555638600c5cd25f999bdb0107e120fb6df9554fbb44fe5daf3965d68ff4d226a36b33a070adf9f60d8564d"
+                },
+                "tlsClientHelloLength": "462",
+                "tlsClientAuth": {
+                    "certPresented": "0",
+                    "certVerified": "NONE",
+                    "certRevoked": "0",
+                    "certIssuerDN": "",
+                    "certSubjectDN": "",
+                    "certIssuerDNRFC2253": "",
+                    "certSubjectDNRFC2253": "",
+                    "certIssuerDNLegacy": "",
+                    "certSubjectDNLegacy": "",
+                    "certSerial": "",
+                    "certIssuerSerial": "",
+                    "certSKI": "",
+                    "certIssuerSKI": "",
+                    "certFingerprintSHA1": "",
+                    "certFingerprintSHA256": "",
+                    "certNotBefore": "",
+                    "certNotAfter": "",
+                    "certRFC9440": "",
+                    "certRFC9440TooLarge": false,
+                    "certChainRFC9440": "",
+                    "certChainRFC9440TooLarge": false
+                },
+                "verifiedBotCategory": "",
+                "edgeL4": {
+                    "deliveryRate": 44580
+                }
+            }
+        },
+        "response": {
+            "status": 500
+        }
+    }
+}

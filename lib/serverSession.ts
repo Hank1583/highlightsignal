@@ -27,8 +27,6 @@ export type ServerSession = {
   isDemo?: boolean;
 };
 
-const jwtKey = getJwtSecret();
-
 export async function getServerSession(): Promise<ServerSession | null> {
   const tokenStore = await cookies();
   const tokens = tokenStore.getAll("token").map((cookie) => cookie.value);
@@ -38,6 +36,7 @@ export async function getServerSession(): Promise<ServerSession | null> {
   }
 
   try {
+    const jwtKey = getJwtSecret();
     const payload = await verifyAnyToken(tokens, jwtKey);
 
     if (!payload) {

@@ -3,8 +3,6 @@ import { getJwtSecret } from "@/lib/jwtSecret";
 import { hasProductAccess } from "@/lib/products";
 import { clearTokenCookie, verifyAnyToken } from "@/lib/sessionToken";
 
-const key = getJwtSecret();
-
 const protectedPrefixes = [
   "/dashboard",
   "/ga",
@@ -51,6 +49,7 @@ export async function middleware(req: NextRequest) {
   }
 
   try {
+    const key = getJwtSecret();
     const payload = await verifyAnyToken(tokens, key);
 
     if (!payload) {
