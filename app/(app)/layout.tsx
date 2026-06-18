@@ -2,6 +2,7 @@ export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 import AppHeader from "@/components/layout/AppHeader";
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getJwtSecret } from "@/lib/jwtSecret";
@@ -15,6 +16,13 @@ type Session = {
   name: string;
   enabledProducts: string[];
   isDemo?: boolean;
+};
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 async function getSession(): Promise<Session | null> {

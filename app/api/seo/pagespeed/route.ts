@@ -83,7 +83,6 @@ export async function POST(req: NextRequest) {
         strategy,
         url: body?.url,
       }),
-      cache: "no-store",
     });
 
     const json = await parsePhpJson(phpRes);

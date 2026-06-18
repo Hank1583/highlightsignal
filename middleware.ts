@@ -20,6 +20,7 @@ const routePermissionMap: Record<string, string> = {
   "/ga": "ga",
   "/si": "si",
   "/seo": "si",
+  "/ads": "ads",
 };
 
 function isProtectedPath(pathname: string) {
