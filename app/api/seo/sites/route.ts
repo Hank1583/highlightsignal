@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";
 import { getServerSession } from "@/lib/serverSession";

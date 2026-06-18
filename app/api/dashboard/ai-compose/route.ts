@@ -9,8 +9,6 @@ import {
   recordDashboardAiUsage,
 } from "@/lib/dashboardAiQuota";
 
-export const runtime = "edge";
-
 type GaConnection = {
   id: number | string;
 };

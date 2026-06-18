@@ -1,4 +1,3 @@
-export const runtime = "edge";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";

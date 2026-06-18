@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { highlightPhpApiUrl } from "@/lib/config";
 import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";

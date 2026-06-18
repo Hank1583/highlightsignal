@@ -2,8 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/jwtSecret";
 
-export const runtime = "edge";
-
 export async function GET(req: NextRequest) {
   const token = req.cookies.get("token")?.value;
 

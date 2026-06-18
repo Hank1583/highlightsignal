@@ -1,4 +1,3 @@
-export const runtime = "edge";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { getGaReportList } from "@/lib/ga/gaApi";

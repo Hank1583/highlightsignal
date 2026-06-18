@@ -1,5 +1,3 @@
-export const runtime = "edge";
-
 import { getServerSession } from "@/lib/serverSession";
 import { gaQuery } from "@/lib/ga/gaApi";
 
