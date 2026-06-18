@@ -28,12 +28,33 @@ Before release:
 - Run `npm run lint`.
 - Run `npx tsc --noEmit --pretty false`.
 - Run `npm run build`.
+- Run `npm run build:cf` for the Cloudflare Worker bundle.
 - Confirm production has `JWT_SECRET`.
 - Confirm login sets the `token` cookie with `HttpOnly`, `Secure`, `SameSite=Lax`, and `Path=/`.
 - Confirm `/api/auth/logout` clears the `token` cookie.
 - Confirm protected routes redirect anonymous users to `/auth/login`.
 - Confirm `enabledProducts` gates GA and Search Intelligence routes correctly.
 - Confirm `NEXT_PUBLIC_HIGHLIGHT_UPGRADE_URL` points to the current official plan or payment page.
+
+## Cloudflare Deployment
+
+This application uses OpenNext and must be deployed as a Cloudflare Worker. Do not
+deploy it as a Pages project and do not use the deprecated
+`@cloudflare/next-on-pages` build command.
+
+For a Cloudflare Workers Builds Git integration, use:
+
+```text
+Build command: npm run build:cf
+Deploy command: npx wrangler deploy
+```
+
+The Worker entry point and static assets are configured in `wrangler.jsonc`.
+For a local deployment from an authenticated workstation, run:
+
+```bash
+npm run deploy:cf
+```
 
 ## PHP Backend
 
