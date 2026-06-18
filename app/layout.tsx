@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 
 const GA_MEASUREMENT_ID = "G-H2NX6QY2EX";
+
 const SITE_URL = "https://highlightsignal.com";
 const SITE_NAME = "Highlight Signal";
 const SITE_TITLE = "Highlight Signal | AI 流量分析、SEO 與搜尋能見度平台";
