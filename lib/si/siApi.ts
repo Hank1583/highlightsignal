@@ -1,5 +1,10 @@
 import { highlightPhpApiUrl } from "@/lib/config";
-import type { SiModule, SiSitesResponse, SiSummaryResponse } from "@/lib/si/types";
+import type {
+  SiHistoryResponse,
+  SiModule,
+  SiSitesResponse,
+  SiSummaryResponse,
+} from "@/lib/si/types";
 
 function getErrorMessage(json: SiSummaryResponse, fallback: string) {
   return json?.error?.message || json?.message || fallback;
@@ -82,6 +87,43 @@ export async function phpGenerateSiSummary({
 
   if (!res.ok || !json.ok) {
     throw new Error(getErrorMessage(json, `${module} generate failed`));
+  }
+
+  return json;
+}
+
+export async function phpGetSiHistory({
+  module,
+  userId,
+  siteId,
+  tab,
+  limit = 10,
+}: {
+  module: SiModule;
+  userId: number;
+  siteId: number;
+  tab: string;
+  limit?: number;
+}): Promise<SiHistoryResponse> {
+  const res = await fetch(highlightPhpApiUrl(`si/${module}/history.php`), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      site_id: siteId,
+      tab,
+      limit,
+    }),
+  });
+
+  const json = await parseJsonSafe<SiHistoryResponse>(res);
+
+  if (!res.ok || !json.ok) {
+    throw new Error(
+      json?.error?.message || json?.message || `${module} history failed`
+    );
   }
 
   return json;

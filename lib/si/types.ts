@@ -51,6 +51,7 @@ export type SiSummary = {
   sideItems: SiSideItem[];
   recommendation: string;
   meta?: {
+    id?: number;
     source?: string;
     status?: string;
     analyzed_at?: string | null;
@@ -60,6 +61,16 @@ export type SiSummary = {
 export type SiSummaryResponse = {
   ok: boolean;
   data?: SiSummary;
+  error?: {
+    code: string;
+    message: string;
+  };
+  message?: string;
+};
+
+export type SiHistoryResponse = {
+  ok: boolean;
+  data?: SiSummary[];
   error?: {
     code: string;
     message: string;

@@ -12,6 +12,41 @@ type SubscribedApp = {
   expire_at: string;
 };
 
+// Java 後端位址（AdFusion 受保護路由用）。與 adfusion 專案一致。
+const BACKEND =
+  process.env.API_HOST ||
+  process.env.NEXT_PUBLIC_API_HOST ||
+  "http://localhost:8080";
+
+/**
+ * 向 Java 後端換取 AdFusion 用的 JWT，包進平台 session JWT，
+ * 供 /ads 子系統（adfusion）呼叫受保護路由時帶 Authorization: Bearer。
+ * best-effort：取不到 token 不擋登入；ADS 受保護 API 屆時會回 401 → 前端重登。
+ */
+async function fetchBackendToken(
+  email: string,
+  password: string
+): Promise<string | undefined> {
+  try {
+    const r = await fetch(`${BACKEND}/adfusion/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await r.json();
+    if (r.ok && data?.isSuccess && data?.result?.token) {
+      return String(data.result.token);
+    }
+    console.warn(
+      "[login] backend /adfusion/auth/login no token:",
+      data?.message ?? r.status
+    );
+  } catch (e) {
+    console.warn("[login] backend /adfusion/auth/login request failed:", e);
+  }
+  return undefined;
+}
+
 async function signToken(payload: {
   id: string;
   email: string;
@@ -29,6 +64,8 @@ async function signToken(payload: {
   avatar?: string | null;
   loginAt?: string | null;
   isDemo?: boolean;
+  /** Java 後端發的 JWT，供 /ads 子系統呼叫受保護路由 */
+  backendToken?: string;
 }) {
   const key = getJwtSecret();
   return await new SignJWT(payload)
@@ -164,6 +201,15 @@ export async function POST(req: Request) {
     ];
 
     const enabledProducts = normalizeEnabledProducts(rawEnabledProducts);
+
+    // 若帳號有 ads 權限，順便跟 Java 後端換 AdFusion token 包進 JWT。
+    // 沒 ads 權限就不打，省一次外部請求。
+    const backendToken = enabledProducts.includes("ads")
+      ? await fetchBackendToken(
+          String(body?.email || "").trim(),
+          String(body?.password || "")
+        )
+      : undefined;
     // console.log("subscribedApps =", subscribedApps);
     // console.log("enabledProducts =", enabledProducts);
     // console.log("token payload =", {
@@ -189,6 +235,7 @@ export async function POST(req: Request) {
       ip: nullableString(data.ip),
       avatar: nullableString(data.avatar),
       loginAt: nullableString(data.login_at),
+      backendToken,
     });
 
     const res = NextResponse.json({

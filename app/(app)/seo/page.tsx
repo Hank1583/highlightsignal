@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { SeoSite, SeoSummaryResponse } from "@/lib/seo/types";
 import AddSeoSiteDialog from "@/components/seo/AddSeoSiteDialog";
+import { formatAnalysisDate } from "@/lib/formatAnalysisDate";
 
 type SummaryData = SeoSummaryResponse["data"];
 type PageSpeedStrategy = "mobile" | "desktop";
@@ -113,8 +114,10 @@ export default function SeoPage() {
   const [pageSpeedStrategy, setPageSpeedStrategy] =
     useState<PageSpeedStrategy>("mobile");
   const [pageSpeed, setPageSpeed] = useState<PageSpeedData | null>(null);
+  const [pageSpeedHistory, setPageSpeedHistory] = useState<PageSpeedData[]>([]);
   const [pageSpeedCache, setPageSpeedCache] = useState<PageSpeedCache>({});
   const [loadingPageSpeed, setLoadingPageSpeed] = useState(false);
+  const [loadingPageSpeedHistory, setLoadingPageSpeedHistory] = useState(false);
   const [pageSpeedError, setPageSpeedError] = useState("");
   const isDemo = Boolean(user?.isDemo);
 
@@ -223,6 +226,44 @@ export default function SeoPage() {
     return sites.find((site) => site.id === selectedSiteId) || null;
   }, [sites, selectedSiteId]);
 
+  const loadPageSpeedHistory = useCallback(
+    async (siteId: number, strategy: PageSpeedStrategy) => {
+      try {
+        setLoadingPageSpeedHistory(true);
+        const res = await fetch("/api/seo/pagespeed", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            site_id: siteId,
+            strategy,
+            history: true,
+            limit: 10,
+          }),
+          cache: "no-store",
+        });
+        const json = await parseJsonSafe<{
+          ok: boolean;
+          data?: PageSpeedData[];
+          error?: { message?: string };
+          message?: string;
+        }>(res);
+
+        if (!res.ok || !json.ok || !Array.isArray(json.data)) {
+          throw new Error(getErrorMessage(json, "PageSpeed 歷史紀錄載入失敗"));
+        }
+
+        setPageSpeedHistory(json.data);
+      } catch {
+        setPageSpeedHistory([]);
+      } finally {
+        setLoadingPageSpeedHistory(false);
+      }
+    },
+    []
+  );
+
   const loadPageSpeed = useCallback(
     async (
       url: string,
@@ -269,6 +310,9 @@ export default function SeoPage() {
           writePageSpeedCache(next);
           return next;
         });
+        if (options?.siteId) {
+          void loadPageSpeedHistory(options.siteId, strategy);
+        }
       } catch (error) {
         setPageSpeedError(
           error instanceof Error ? error.message : "PageSpeed 跑分失敗"
@@ -277,7 +321,7 @@ export default function SeoPage() {
         setLoadingPageSpeed(false);
       }
     },
-    [isDemo]
+    [isDemo, loadPageSpeedHistory]
   );
 
   const loadLatestPageSpeed = useCallback(
@@ -353,6 +397,14 @@ export default function SeoPage() {
     selectedSite?.site_url,
     selectedSiteId,
   ]);
+
+  useEffect(() => {
+    if (selectedSiteId) {
+      void loadPageSpeedHistory(selectedSiteId, pageSpeedStrategy);
+    } else {
+      setPageSpeedHistory([]);
+    }
+  }, [loadPageSpeedHistory, pageSpeedStrategy, selectedSiteId]);
 
   return (
     <>
@@ -481,10 +533,19 @@ export default function SeoPage() {
                   />
                 </section>
 
+                {summary.meta.updated_at ? (
+                  <p className="-mt-3 text-xs font-semibold text-slate-500">
+                    SEO 分析日期：{formatAnalysisDate(summary.meta.updated_at)}
+                    （台北時間）
+                  </p>
+                ) : null}
+
                 <PageSpeedPanel
                   data={pageSpeed}
+                  history={pageSpeedHistory}
                   error={pageSpeedError}
                   loading={loadingPageSpeed}
+                  loadingHistory={loadingPageSpeedHistory}
                   strategy={pageSpeedStrategy}
                   onStrategyChange={setPageSpeedStrategy}
                   onRefresh={() => {
@@ -630,16 +691,20 @@ export default function SeoPage() {
 
 function PageSpeedPanel({
   data,
+  history,
   error,
   loading,
+  loadingHistory,
   strategy,
   onStrategyChange,
   onRefresh,
   disabled = false,
 }: {
   data: PageSpeedData | null;
+  history: PageSpeedData[];
   error: string;
   loading: boolean;
+  loadingHistory: boolean;
   strategy: PageSpeedStrategy;
   onStrategyChange: (strategy: PageSpeedStrategy) => void;
   onRefresh: () => void;
@@ -799,12 +864,115 @@ function PageSpeedPanel({
 
           {data?.fetchedAt ? (
             <p className="mt-3 text-xs font-semibold text-slate-400">
-              最後檢查時間 {new Date(data.fetchedAt).toLocaleString()}
+              效能分析日期：{formatAnalysisDate(data.fetchedAt)}（台北時間）
             </p>
           ) : null}
         </div>
       </div>
+
+      <div className="mt-6 border-t border-slate-200 pt-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-bold text-slate-900">歷史效能比較</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              最近 10 次 {strategy === "mobile" ? "行動版" : "桌面版"} 跑分。
+            </p>
+          </div>
+          {history.length >= 2 &&
+          history[0].score !== null &&
+          history[1].score !== null ? (
+            <ScoreDelta value={history[0].score - history[1].score} />
+          ) : null}
+        </div>
+
+        {loadingHistory ? (
+          <p className="mt-4 text-sm text-slate-500">載入歷史紀錄中...</p>
+        ) : history.length > 0 ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="px-3 py-2">分析日期</th>
+                  <th className="px-3 py-2">效能分數</th>
+                  <th className="px-3 py-2">與前次差異</th>
+                  {history[0].metrics.slice(0, 4).map((metric) => (
+                    <th key={metric.id} className="px-3 py-2">
+                      {metric.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {history.map((item, index) => {
+                  const previous = history[index + 1]?.score;
+                  const delta =
+                    item.score !== null && typeof previous === "number"
+                      ? item.score - previous
+                      : null;
+
+                  return (
+                    <tr key={`${item.fetchedAt}-${index}`} className="text-slate-600">
+                      <td className="whitespace-nowrap px-3 py-3 font-semibold">
+                        {formatAnalysisDate(item.fetchedAt)}
+                      </td>
+                      <td className="px-3 py-3 text-lg font-black text-slate-950">
+                        {item.score ?? "-"}
+                      </td>
+                      <td className="px-3 py-3">
+                        {delta === null ? (
+                          <span className="text-slate-300">—</span>
+                        ) : (
+                          <ScoreDelta value={delta} compact />
+                        )}
+                      </td>
+                      {history[0].metrics.slice(0, 4).map((metric) => {
+                        const value = item.metrics.find(
+                          (candidate) => candidate.id === metric.id
+                        )?.value;
+                        return (
+                          <td key={metric.id} className="whitespace-nowrap px-3 py-3">
+                            {value || "-"}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-slate-500">
+            重新跑分後會開始累積歷史紀錄。
+          </p>
+        )}
+      </div>
     </section>
+  );
+}
+
+function ScoreDelta({
+  value,
+  compact = false,
+}: {
+  value: number;
+  compact?: boolean;
+}) {
+  return (
+    <span
+      className={`inline-flex rounded-full font-black ${
+        compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"
+      } ${
+        value > 0
+          ? "bg-emerald-50 text-emerald-700"
+          : value < 0
+            ? "bg-rose-50 text-rose-700"
+            : "bg-slate-100 text-slate-500"
+      }`}
+    >
+      {value > 0 ? "+" : ""}
+      {value}
+    </span>
   );
 }
 

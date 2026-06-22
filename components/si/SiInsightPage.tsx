@@ -7,18 +7,22 @@ import {
   ArrowUpRight,
   Bot,
   CheckCircle2,
+  Clock3,
   FileQuestion,
   Globe2,
+  History,
   Lightbulb,
   Radar,
 } from "lucide-react";
 import type {
+  SiHistoryResponse,
   SiModule,
   SiSite,
   SiSitesResponse,
   SiSummary,
   SiSummaryResponse,
 } from "@/lib/si/types";
+import { formatAnalysisDate } from "@/lib/formatAnalysisDate";
 
 type ModuleConfig = {
   module: SiModule;
@@ -202,8 +206,10 @@ export default function SiInsightPage({
   const [siteId, setSiteId] = useState(querySiteId || DEFAULT_SITE_ID);
   const [sites, setSites] = useState<SiSite[]>([]);
   const [summary, setSummary] = useState<SiSummary | null>(null);
+  const [history, setHistory] = useState<SiSummary[]>([]);
   const [loadingSites, setLoadingSites] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [errorText, setErrorText] = useState("");
   const isDemo = Boolean(user?.isDemo);
@@ -211,6 +217,36 @@ export default function SiInsightPage({
   useEffect(() => {
     setSiteId(querySiteId || DEFAULT_SITE_ID);
   }, [querySiteId]);
+
+  const loadHistory = useCallback(async () => {
+    if (!siteId || sites.length === 0) return;
+
+    try {
+      setLoadingHistory(true);
+      const res = await fetch(`/api/si/${module}/history`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          site_id: siteId,
+          tab,
+        }),
+        cache: "no-store",
+      });
+      const json = await parseJsonSafe<SiHistoryResponse>(res);
+
+      if (!res.ok || !json.ok || !Array.isArray(json.data)) {
+        throw new Error(json?.error?.message || "歷史分析載入失敗");
+      }
+
+      setHistory(json.data);
+    } catch {
+      setHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [module, siteId, sites.length, tab]);
 
   useEffect(() => {
     let alive = true;
@@ -306,6 +342,9 @@ export default function SiInsightPage({
         }
 
         setSummary(json.data);
+        if (options?.generate) {
+          void loadHistory();
+        }
       } catch (error) {
         setSummary(null);
         setErrorText(error instanceof Error ? error.message : "讀取 SI 分析資料失敗");
@@ -314,12 +353,16 @@ export default function SiInsightPage({
         setGenerating(false);
       }
     },
-    [isDemo, module, siteId, sites.length, tab]
+    [isDemo, loadHistory, module, siteId, sites.length, tab]
   );
 
   useEffect(() => {
     void loadSummary();
   }, [loadSummary]);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
 
   const hasData = Boolean(summary?.title || summary?.metrics.length || summary?.items.length);
 
@@ -345,6 +388,21 @@ export default function SiInsightPage({
     () => (summary && hasData ? buildScoreBreakdown(module, summary) : null),
     [hasData, module, summary]
   );
+  const analyzedAt = formatAnalysisDate(summary?.meta?.analyzed_at);
+  const historyScores = useMemo(
+    () =>
+      history.map((item) => ({
+        summary: item,
+        score: buildScoreBreakdown(module, item).total,
+      })),
+    [history, module]
+  );
+  const latestScore = historyScores[0]?.score;
+  const previousScore = historyScores[1]?.score;
+  const latestDelta =
+    typeof latestScore === "number" && typeof previousScore === "number"
+      ? latestScore - previousScore
+      : null;
 
   return (
     <div className="space-y-6">
@@ -382,6 +440,11 @@ export default function SiInsightPage({
             {summary?.site && (
               <p className="mt-3 break-words text-xs font-semibold text-slate-400">
                 {summary.site.name || summary.site.url} / {summary.site.url}
+              </p>
+            )}
+            {analyzedAt && (
+              <p className="mt-2 text-xs font-semibold text-slate-500">
+                分析日期：{analyzedAt}（台北時間）
               </p>
             )}
           </div>
@@ -450,6 +513,93 @@ export default function SiInsightPage({
 
       {!loadingSites && !loading && !errorText && hasData && summary && (
         <>
+          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <History className="h-5 w-5 text-slate-500" />
+                  <h3 className="font-bold text-slate-900">歷史分析比較</h3>
+                </div>
+                <p className="mt-1 text-sm text-slate-500">
+                  顯示最近 10 次分析；點選紀錄可查看當時的完整內容。
+                </p>
+              </div>
+              {latestDelta !== null && (
+                <div
+                  className={`rounded-full px-3 py-1.5 text-sm font-black ${
+                    latestDelta > 0
+                      ? "bg-emerald-50 text-emerald-700"
+                      : latestDelta < 0
+                        ? "bg-rose-50 text-rose-700"
+                        : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  較上次 {latestDelta > 0 ? "+" : ""}
+                  {latestDelta}
+                </div>
+              )}
+            </div>
+
+            {loadingHistory ? (
+              <p className="mt-4 text-sm text-slate-500">載入歷史紀錄中...</p>
+            ) : historyScores.length > 0 ? (
+              <div className="mt-4 overflow-x-auto">
+                <div className="flex min-w-max gap-3 pb-1">
+                  {historyScores.map(({ summary: item, score }, index) => {
+                    const active = item.meta?.id === summary.meta?.id;
+                    const previous = historyScores[index + 1]?.score;
+                    const delta =
+                      typeof previous === "number" ? score - previous : null;
+
+                    return (
+                      <button
+                        key={item.meta?.id || `${item.meta?.analyzed_at}-${index}`}
+                        type="button"
+                        onClick={() => setSummary(item)}
+                        className={`w-44 rounded-lg border p-4 text-left transition ${
+                          active
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-slate-200 bg-slate-50 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                          <Clock3 className="h-3.5 w-3.5" />
+                          {formatAnalysisDate(item.meta?.analyzed_at)}
+                        </div>
+                        <div className="mt-3 flex items-end justify-between">
+                          <span className="text-2xl font-black text-slate-950">
+                            {score}
+                          </span>
+                          {delta !== null && (
+                            <span
+                              className={`text-xs font-black ${
+                                delta > 0
+                                  ? "text-emerald-600"
+                                  : delta < 0
+                                    ? "text-rose-600"
+                                    : "text-slate-400"
+                              }`}
+                            >
+                              {delta > 0 ? "+" : ""}
+                              {delta}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs font-semibold text-slate-400">
+                          {index === 0 ? "最新分析" : "歷史分析"}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-slate-500">
+                目前只有最新資料，重新產生分析後會開始累積比較紀錄。
+              </p>
+            )}
+          </section>
+
           {scoreBreakdown && (
             <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
               <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">

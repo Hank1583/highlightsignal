@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const siteId = Number(body?.site_id || 0);
     const strategy: Strategy = body?.strategy === "desktop" ? "desktop" : "mobile";
-    const action = body?.cacheOnly ? "latest" : "run";
+    const action = body?.history ? "history" : body?.cacheOnly ? "latest" : "run";
 
     if (action === "run" && isDemoSession(session)) {
       return NextResponse.json(
@@ -69,7 +69,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const phpRes = await fetch(highlightPhpApiUrl("si/seo/pagespeed.php"), {
+    const endpoint = action === "history"
+      ? "si/seo/pagespeed_history.php"
+      : "si/seo/pagespeed.php";
+    const phpRes = await fetch(highlightPhpApiUrl(endpoint), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -80,6 +83,7 @@ export async function POST(req: NextRequest) {
         site_id: siteId,
         strategy,
         url: body?.url,
+        limit: body?.limit,
       }),
     });
 
