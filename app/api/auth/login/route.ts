@@ -71,7 +71,9 @@ async function signToken(payload: {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    // 12h：與 AdFusion 後端 backendToken 的壽命對齊，避免兩者不同步
+    // （平台 session 滿 12h 統一重登；ADS 受保護路由才不會中途 401）
+    .setExpirationTime("12h")
     .sign(key);
 }
 
@@ -139,7 +141,7 @@ export async function POST(req: Request) {
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/",
-        maxAge: 60 * 60 * 24 * 7,
+        maxAge: 60 * 60 * 12, // 12h，與 JWT / backendToken 對齊
       });
 
       return res;
@@ -263,7 +265,7 @@ export async function POST(req: Request) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 12, // 12h，與 JWT / backendToken 對齊
     });
 
     return res;

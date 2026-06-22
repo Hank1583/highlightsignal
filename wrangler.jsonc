@@ -3,6 +3,12 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // 登入時 fetchBackendToken 要打 Java 後端（換 AdFusion 的 backendToken）。
+  // 用「執行時」變數 API_HOST（非 NEXT_PUBLIC_，後者在 GitHub CI build 時無 .env.local
+  // 會被內嵌成 undefined → 退回 localhost → Cloudflare error 1003）。
+  "vars": {
+    "API_HOST": "https://adfusion-backend-893008545922.asia-east1.run.app"
+  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
