@@ -276,13 +276,24 @@ export default function LandingPage() {
                     ))}
                   </ul>
 
-                  <Link
-                    href={product.href}
-                    className="mt-auto inline-flex items-center gap-2 pt-8 text-sm font-black text-zinc-950 transition group-hover:gap-3"
-                  >
-                    前往功能
-                    <ArrowRight size={17} />
-                  </Link>
+                  {/* ADS（/ads）是獨立 worker，用 <a> 硬導航直接到 /ads/；其餘走 SPA Link */}
+                  {product.href === "/ads" ? (
+                    <a
+                      href="/ads/"
+                      className="mt-auto inline-flex items-center gap-2 pt-8 text-sm font-black text-zinc-950 transition group-hover:gap-3"
+                    >
+                      前往功能
+                      <ArrowRight size={17} />
+                    </a>
+                  ) : (
+                    <Link
+                      href={product.href}
+                      className="mt-auto inline-flex items-center gap-2 pt-8 text-sm font-black text-zinc-950 transition group-hover:gap-3"
+                    >
+                      前往功能
+                      <ArrowRight size={17} />
+                    </Link>
+                  )}
                 </article>
               );
             })}

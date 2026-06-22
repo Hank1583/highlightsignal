@@ -101,7 +101,14 @@ export default function ProductSelect({ enabledProducts = ["dashboard"] }: Props
                   type="button"
                   key={product.key}
                   onClick={() => {
-                    router.push(product.basePath);
+                    // ADS（/ads）是獨立的 adfusion worker，必須硬導航跨過去；
+                    // 直接到 /ads/（帶斜線）避免多一次 308 轉址。
+                    // 其餘產品都在本 worker，用 SPA router.push。
+                    if (product.key === "ads") {
+                      window.location.href = "/ads/";
+                    } else {
+                      router.push(product.basePath);
+                    }
                     setOpen(false);
                   }}
                   className={[
