@@ -276,13 +276,16 @@ function sendReportMail($scheduleId, $startDate, $endDate, $type)
  */
 function isDirectExecution()
 {
-    if (PHP_SAPI === 'cli') {
-        $scriptFilename = isset($_SERVER['SCRIPT_FILENAME']) ? realpath((string)$_SERVER['SCRIPT_FILENAME']) : '';
-        return $scriptFilename !== false && $scriptFilename === realpath(__FILE__);
+    // Every HTTP request to this file must enter the signed-auth branch. On
+    // shared hosting SCRIPT_FILENAME can resolve through a different symlink
+    // or document-root path, so comparing realpath() values can incorrectly
+    // classify a direct request as an include and return an unauthenticated 200.
+    if (PHP_SAPI !== 'cli') {
+        return true;
     }
 
-    $currentFile = isset($_SERVER['SCRIPT_FILENAME']) ? realpath((string)$_SERVER['SCRIPT_FILENAME']) : '';
-    return $currentFile !== false && $currentFile === realpath(__FILE__);
+    $scriptFilename = isset($_SERVER['SCRIPT_FILENAME']) ? realpath((string)$_SERVER['SCRIPT_FILENAME']) : '';
+    return $scriptFilename !== false && $scriptFilename === realpath(__FILE__);
 }
 
 if (isDirectExecution()) {
