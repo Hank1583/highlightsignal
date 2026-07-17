@@ -3,7 +3,7 @@
 Status: IMPLEMENTED_LOCAL_PENDING_FIRST_CI_RUN
 Date: 2026-07-17
 
-The GitHub Actions workflow runs on pull requests and non-main branch pushes with read-only repository permission. It cannot deploy because it receives no Cloudflare token or production secret. Both Wrangler commands include `--dry-run` and write output beneath ignored `.wrangler/` directories.
+The GitHub Actions workflow runs on pull requests, every branch push including main, and manual dispatch with read-only repository permission. It cannot deploy because it receives no Cloudflare token or production secret. Both Wrangler commands include `--dry-run` and write output beneath ignored `.wrangler/` directories.
 
 ## Gates
 
@@ -28,3 +28,5 @@ PHP syntax lint is intentionally absent because the owner requires URL-only veri
 ## Local execution evidence
 
 The full Node/OpenNext gate, Worker binding type check, startup analysis, Release boundary self-test, and both named-environment Wrangler deploy dry-runs passed on 2026-07-17. Both Wrangler commands stopped at the explicit dry-run boundary; no Worker was deployed. V08-06 remains pending only for the first hosted GitHub Actions run and the owner-accepted PHP lint omission.
+
+The first GitHub Desktop publish updated main directly while the initial workflow excluded main pushes, so GitHub correctly reported zero runs. The trigger was corrected to cover all pushes and manual dispatch; permissions and dry-run-only deployment commands remain unchanged.
