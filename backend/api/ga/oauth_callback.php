@@ -4,15 +4,6 @@ use HighlightSignal\Config\Environment;
 
 require_once __DIR__ . '/../db_connect.php'; // 資料庫連線
 
-$client_id = (string) getenv("GOOGLE_CLIENT_ID");
-$client_secret = (string) getenv("GOOGLE_CLIENT_SECRET");
-$redirect_uri = (string) getenv("GOOGLE_OAUTH_REDIRECT_URI");
-
-if ($client_id === '' || $client_secret === '' || $redirect_uri === '') {
-    http_response_code(500);
-    die('Google OAuth configuration is incomplete');
-}
-
 // Step 1: Google 回傳的 code
 if (!isset($_GET["code"])) {
     die("Missing code");
@@ -44,6 +35,18 @@ $stateTimestamp = isset($state['ts']) ? (int) $state['ts'] : 0;
 if ($member_id <= 0 || $stateTimestamp <= 0 || abs(time() - $stateTimestamp) > 600) {
     http_response_code(400);
     die('Expired OAuth state');
+}
+
+// Provider configuration is checked only after untrusted callback state has
+// been authenticated. Invalid state must fail closed even on a host where the
+// optional Google OAuth integration is not configured yet.
+$client_id = (string) getenv("GOOGLE_CLIENT_ID");
+$client_secret = (string) getenv("GOOGLE_CLIENT_SECRET");
+$redirect_uri = (string) getenv("GOOGLE_OAUTH_REDIRECT_URI");
+
+if ($client_id === '' || $client_secret === '' || $redirect_uri === '') {
+    http_response_code(500);
+    die('Google OAuth configuration is incomplete');
 }
 
 // Step 2: 用 code 換 access_token + refresh_token

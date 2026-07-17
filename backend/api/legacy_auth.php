@@ -9,6 +9,12 @@ use HighlightSignal\Http\Request;
 
 require_once __DIR__ . '/config/bootstrap.php';
 
+// Signed responses must never be served from a shared/browser cache. A cached
+// response would bypass the nonce claim performed by PHP on the next request.
+header('Cache-Control: no-store, private, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 function hs_legacy_auth_error($code, $message, $status)
 {
     http_response_code($status);
