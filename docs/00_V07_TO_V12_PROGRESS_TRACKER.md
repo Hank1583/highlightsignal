@@ -43,10 +43,10 @@ DEFERRED    已決定延後，不計入目前版本
 |---|---|
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
-| Active task | `V08-02` READY — Secret containment |
-| Next task | `V08-02` 秘密圍堵、移轉與必要輪替 |
-| Blocking issue | V08-01 已解除；兩個 credential-bearing legacy PHP files 已保留但排除 Release，交由 V08-02 處理 |
-| Last verified commit | `d5a2a1a`（V08-01 code/config baseline；完整證據見 release report） |
+| Active task | `V08-02` BLOCKED_EXTERNAL_ROTATION |
+| Next task | 取得 production credential rotation 與 staging secret cutover 明確授權 |
+| Blocking issue | Legacy PHP mirror 含已曝露的 DB、OpenAI、Google API/OAuth、service-account 與 report credential；Cloudflare 缺 `PHP_SERVICE_AUTH_SECRET`；尚未完成 staging signed smoke test |
+| Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：
 
@@ -74,6 +74,16 @@ Baseline commits: 735dad5, 9391dcc, 38c7acd, d5a2a1a
 ```
 
 此 blocker 曾表示缺少外部執行證據；V08-01 已以 commit grouping、驗證紀錄與明確排除清單解除。
+
+## Current blocker record
+
+```text
+Blocker ID: BLOCKED_EXTERNAL_ROTATION
+Since: 2026-07-17
+Affected task: V08-02 Secret containment
+Local containment evidence: docs/security/V08-02_SECRET_CONTAINMENT_REPORT.md
+Required change to resume: explicit authorization and provider/hosting access for credential rotation, Cloudflare/PHP secret provisioning, and staging signed smoke test
+```
 
 2026-07-17 已驗證：
 
@@ -130,6 +140,7 @@ V0.8 Release Safety
   - 確認秘密不在 Git、公開目錄、Wrangler vars 或前端 bundle。
   - 補齊 production secret inventory，不記錄實際值。
   - 驗收：secret scan、部署環境變數清單、輪替紀錄。
+  - 本機 containment 已完成：Git/history/public payload/clean Worker bundle scan 通過；legacy mirror exposure 已列管。狀態維持 `BLOCKED_EXTERNAL_ROTATION`，證據見 `docs/security/V08-02_SECRET_CONTAINMENT_REPORT.md`。
 
 - [ ] `V08-03` Next.js → PHP Service Authentication 完整覆蓋
   - 所有正式 PHP business endpoints 驗證簽章、timestamp、nonce／重放條件。

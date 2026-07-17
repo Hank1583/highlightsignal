@@ -1,6 +1,6 @@
 # Task Packet — V08-02 Secret Containment
 
-Status: WAITING_FOR_V08-01  
+Status: BLOCKED_EXTERNAL_ROTATION  
 Milestone: V0.8 Release Safety  
 Dependency: `V08-01`  
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`
