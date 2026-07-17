@@ -1,0 +1,6 @@
+<?php
+
+// The legacy scheduled-report runner has host-specific mail and library settings.
+// Keep the active config.php from the existing PHP service, or recreate it from
+// environment variables before enabling report_runner.php. Never commit passwords.
+throw new RuntimeException('Configure ga/report/config.php on the server before running scheduled reports.');

@@ -1,0 +1,22 @@
+{
+  "name": "highlight/highlight-signal-backend",
+  "description": "Highlight Signal V1 PHP modular monolith",
+  "type": "project",
+  "require": {
+    "php": ">=7.0.26",
+    "ext-json": "*",
+    "ext-mysqli": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "HighlightSignal\\": "src/"
+    }
+  },
+  "scripts": {
+    "migrate": "php bin/migrate.php",
+    "lint": "php bin/lint.php"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}

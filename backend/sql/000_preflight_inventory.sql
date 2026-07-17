@@ -1,0 +1,33 @@
+-- Read-only preflight. Save these results before importing any migration.
+SELECT VERSION() AS database_version;
+SELECT DATABASE() AS database_name;
+
+SELECT
+  TABLE_NAME,
+  ENGINE,
+  TABLE_ROWS,
+  TABLE_COLLATION
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME;
+
+SELECT
+  TABLE_NAME,
+  COLUMN_NAME,
+  COLUMN_TYPE,
+  IS_NULLABLE,
+  COLUMN_KEY
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND COLUMN_NAME IN ('user_id', 'member_id', 'owner_member_id', 'workspace_id')
+ORDER BY TABLE_NAME, ORDINAL_POSITION;
+
+SELECT
+  TABLE_NAME,
+  INDEX_NAME,
+  NON_UNIQUE,
+  GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS indexed_columns
+FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE()
+GROUP BY TABLE_NAME, INDEX_NAME, NON_UNIQUE
+ORDER BY TABLE_NAME, INDEX_NAME;

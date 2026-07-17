@@ -1,0 +1,17 @@
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^api/v1(?:/.*)?$ public/index.php [QSA,L]
+  RewriteRule ^(?:src|config|workers)/ - [F,L,NC]
+</IfModule>
+
+<FilesMatch "^(\.env|\.env\..*|composer\.(json|lock)|README.*|db_connect\.php)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
