@@ -44,8 +44,8 @@ DEFERRED    已決定延後，不計入目前版本
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
 | Active task | `V08-02` BLOCKED_EXTERNAL_ROTATION |
-| Next task | 取得智邦 PHP 7.0 全 payload lint 證據；保留 credential risk blocker 後再決定是否進入 `V08-03` |
-| Blocking issue | HTTP containment、DB bootstrap、Cloudflare matching secret、signed/replay 與 Workspace authorization 均已驗證；owner 因 10+ 系統共用帳號接受 MySQL 不輪替風險並保留 service secret；尚缺 PHP 7.0 全檔 lint |
+| Next task | 在保留 V08-02 credential／PHP lint 風險紀錄下，執行 `V08-03` endpoint authentication coverage |
+| Blocking issue | HTTP containment、DB bootstrap、Cloudflare matching secret、signed/replay 與 Workspace authorization 均已驗證；owner 接受共用 MySQL 不輪替、保留 service secret 與 URL-only PHP 驗證風險；全檔 PHP 7.0 lint 未驗證 |
 | Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：
@@ -94,6 +94,10 @@ environment；不建立 staging 目錄、子網域或測試 DB。測試資料與
 `SERVICE_AUTH_SECRET` 亦維持現值。HTTP containment 已完成，但曝露風險未因不輪替
 而消失，因此 V08-02 維持 `BLOCKED_EXTERNAL_ROTATION`。未來替代方案是新增
 Highlight Signal 專用最小權限 DB user，只切換本系統，不修改共用帳號。
+
+2026-07-17 owner PHP verification decision：PHP 僅以線上 URL 執行 smoke／negative
+tests，不執行全 payload `php -l`。已呼叫 route 的結果有效，但未載入 PHP 檔案的
+PHP 7.0 相容性維持未驗證風險，不標記為 PASS。
 
 2026-07-17 已驗證：
 

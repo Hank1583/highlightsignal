@@ -239,3 +239,16 @@ The signed smoke used member `1` and workspace header `0`, matching the
 pre-launch BFF workspace-list flow. It may create the default test Workspace
 for that member when none exists, which is within the owner's authorized test
 data scope. No response body or secret value was printed or recorded.
+
+### Owner PHP verification decision — 2026-07-17
+
+The owner selected URL-only verification for the PHP payload and declined the
+full target-compatible `php -l` pass. A `php:7.0-cli` image had been downloaded
+before that decision arrived, but no lint command, project mount, or test
+container was run; Docker Desktop was then stopped after confirming that no
+containers were active.
+
+The successful URL tests are valid evidence for the routes they exercised, but
+they cannot prove syntax/runtime compatibility for PHP files that were not
+loaded by those requests. The full-file lint acceptance item remains explicitly
+unverified and is treated as an accepted release risk, not a pass.
