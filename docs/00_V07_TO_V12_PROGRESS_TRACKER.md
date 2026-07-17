@@ -45,7 +45,7 @@ DEFERRED    已決定延後，不計入目前版本
 | Active milestone | V0.8 — Release Safety |
 | Active task | `V08-02` BLOCKED_EXTERNAL_ROTATION |
 | Next task | 在現行智邦 `/highlightsignal/v2` 與現有 DB 執行備份、private secret 原地切換及 signed smoke test |
-| Blocking issue | 原地切換授權已取得，但仍缺 provider／hosting 實際操作與輪替證據；Cloudflare 缺 `PHP_SERVICE_AUTH_SECRET`；智邦 runtime 固定 PHP 7.0／MySQL 5.6 |
+| Blocking issue | 智邦 private/public HTTP containment 與 DB bootstrap 已驗證；仍缺曝露 credential 輪替、Cloudflare `PHP_SERVICE_AUTH_SECRET`、signed request 與 Workspace authorization 證據；智邦 runtime 固定 PHP 7.0／MySQL 5.6 |
 | Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：

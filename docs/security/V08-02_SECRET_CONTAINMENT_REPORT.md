@@ -53,6 +53,30 @@ hardcoded credential safe against FTP access, hosting-account compromise,
 backup exposure, or accidental payload copying. The repository's sanitized
 `db_connect.php` and private environment layout remain required.
 
+During the 2026-07-17 in-place upload, the new private environment URL initially
+returned HTTP 200 and the deployment README was also public. No response body
+was retrieved by the verification process. The owner then uploaded explicit
+deny rules to both the private directory and `/v2`, and removed the server copy
+of `UPLOAD_README.md`. The follow-up status-only verification returned:
+
+| Check | Final HTTP status |
+|---|---:|
+| `/highlightsignal/v2/api/v1/health` | 200 |
+| `/highlightsignal/v2/UPLOAD_README.md` | 404 |
+| `/highlightsignal/v2/.env` | 403 |
+| `/highlightsignal/v2/db_connect.php` | 403 |
+| `/highlightsignal/v2/config/bootstrap.php` | 403 |
+| `/highlightsignal/private/.env` | 403 |
+| unsigned `/highlightsignal/v2/api/v1/workspaces` | 401 |
+
+Because the private environment URL was briefly reachable with HTTP 200, every
+credential placed in that file remains classified as potentially exposed and
+must be rotated even though the HTTP containment is now effective. Under the
+current release flow, the unsigned workspace request reaching the authentication
+boundary also provides positive evidence that environment loading and database
+connection completed before the expected 401 response. It does not replace the
+required signed request and workspace authorization tests.
+
 The health endpoint intentionally bypasses database creation and service HMAC
 authentication, so HTTP 200 does not count as DB, auth, or signed API smoke-test
 evidence.
