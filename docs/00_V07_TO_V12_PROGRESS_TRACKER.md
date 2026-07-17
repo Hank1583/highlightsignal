@@ -44,8 +44,8 @@ DEFERRED    已決定延後，不計入目前版本
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
 | Active task | `V08-02` BLOCKED_EXTERNAL_ROTATION |
-| Next task | 在現行智邦 `/highlightsignal/v2` 與現有 DB 執行備份、private secret 原地切換及 signed smoke test |
-| Blocking issue | 智邦 private/public HTTP containment 與 DB bootstrap 已驗證；仍缺曝露 credential 輪替、Cloudflare `PHP_SERVICE_AUTH_SECRET`、signed request 與 Workspace authorization 證據；智邦 runtime 固定 PHP 7.0／MySQL 5.6 |
+| Next task | 保留現有 `SERVICE_AUTH_SECRET`，在 Cloudflare provision matching `PHP_SERVICE_AUTH_SECRET` 並執行 signed smoke test |
+| Blocking issue | 智邦 HTTP containment 與 DB bootstrap 已驗證；owner 因 10+ 系統共用帳號接受 MySQL 不輪替風險並保留 service secret；仍缺 Cloudflare matching secret、signed request 與 Workspace authorization 證據 |
 | Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：
@@ -89,6 +89,11 @@ Required change to resume: provider/hosting access for credential rotation, Clou
 `/highlightsignal/v2` 與現有 MySQL database 作為 pre-launch integration
 environment；不建立 staging 目錄、子網域或測試 DB。測試資料與 table 可在備份及
 可回滾 migration 前提下調整，但不得對現有 DB 執行破壞性的 failure simulation。
+
+2026-07-17 owner risk decision：共用 MySQL 帳號連動 10+ 系統，不變更現有密碼；
+`SERVICE_AUTH_SECRET` 亦維持現值。HTTP containment 已完成，但曝露風險未因不輪替
+而消失，因此 V08-02 維持 `BLOCKED_EXTERNAL_ROTATION`。未來替代方案是新增
+Highlight Signal 專用最小權限 DB user，只切換本系統，不修改共用帳號。
 
 2026-07-17 已驗證：
 

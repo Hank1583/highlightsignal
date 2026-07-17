@@ -187,6 +187,22 @@ Provider/host access is still required to execute:
 Until required rotations and the in-place signed smoke test are complete, this
 task must remain `BLOCKED_EXTERNAL_ROTATION` and may not be marked `DONE`.
 
+### Owner risk decision — 2026-07-17
+
+The owner declined rotation of the current MySQL password because the same
+account is used by more than ten existing systems and an in-place password
+change would cause a multi-system outage. The owner also elected to retain the
+current `SERVICE_AUTH_SECRET`. No credential value was requested or recorded.
+
+HTTP containment is complete, but this decision does not erase the earlier
+HTTP 200 exposure window. V08-02 therefore remains
+`BLOCKED_EXTERNAL_ROTATION` rather than `DONE`. The preferred compensating
+change is to create a new least-privileged MySQL user dedicated to Highlight
+Signal and update only this application's private environment; that change is
+deferred and must not modify the shared account. The retained service secret
+still requires matching Cloudflare provisioning and a successful signed smoke
+test.
+
 Because the host runtime is fixed, V08-05 must execute PHP 7.0-compatible lint
 and MySQL 5.6-compatible validation on the 智邦 target or an equivalent runtime.
 PHP 8.1+ remains a future hosting-migration requirement rather than an in-place
