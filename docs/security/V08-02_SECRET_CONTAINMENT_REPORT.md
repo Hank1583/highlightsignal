@@ -252,3 +252,25 @@ The successful URL tests are valid evidence for the routes they exercised, but
 they cannot prove syntax/runtime compatibility for PHP files that were not
 loaded by those requests. The full-file lint acceptance item remains explicitly
 unverified and is treated as an accepted release risk, not a pass.
+
+### URL-only database schema verification — 2026-07-17
+
+Signed status-only tests against the authorized pre-launch database returned:
+
+| Flow | HTTP status |
+|---|---:|
+| Workspace context read | 200 |
+| GA integration read | 200 |
+| Dashboard workflow read | 200 |
+| Dashboard `create_task` mutation | 200 |
+| Dashboard workflow readback | 200 |
+
+The mutation used the explicit test context `v08-db-smoke-20260717` and created
+authorized test data. It exercised the Workspace/auth foundation plus
+recommendation, decision, task, task-step, business-outcome, and audit writes.
+This is sufficient evidence that the tables required by `010_v1_foundation.sql`,
+`011_dashboard_decision_workflow.sql`, and `012_business_outcomes.sql` already
+exist and function for the tested flow. Those migrations must not be blindly
+re-imported. The backfill template/review scripts and optional SI/AI/SEO schema
+files remain feature-specific and require inventory/review rather than bulk
+execution.
