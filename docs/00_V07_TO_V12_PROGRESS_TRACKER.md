@@ -43,10 +43,10 @@ DEFERRED    已決定延後，不計入目前版本
 |---|---|
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
-| Active task | `V08-06` VERIFY；等待首次 hosted CI |
-| Next task | 建立非 main release-safety branch 並 push，讓 GitHub Actions 執行 V08-06；CI 通過前不部署 |
-| Blocking issue | hosted CI 需非 main branch push 才會執行；PHP 7.0、URL-only lint、舊 OAuth secret、缺少 report config 為已接受／列管風險 |
-| Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
+| Active task | `V08-02` BLOCKED_EXTERNAL_ROTATION；`V08-03`～`V08-06` DONE |
+| Next task | 完成 production readiness 決策：OAuth secret 輪替、Cloudflare named-env secrets、report config；目前不部署 |
+| Blocking issue | 舊 OAuth secret 與其他 V08-02 credentials 仍列為可能曝露；PHP 7.0／URL-only lint 為接受風險；report delivery config 未配置 |
+| Last verified commit | `0811a25`；GitHub Actions run `29568711140` 全部 PASS |
 
 已備妥的獨立執行任務包：
 
@@ -189,11 +189,12 @@ V0.8 Release Safety
   - 第一輪新版 URL 驗證完成並建立測試 context `v08-upload-smoke-20260717`；等待 `538ab3e` 兩檔 hotfix 上傳後收尾。
   - V08-03～V08-05 完整 URL matrix、DB mutation/readback 與 hosting-specific hotfix 均已驗證；依 owner URL-only 決策 DONE，未執行 payload-wide PHP lint。
 
-- [ ] `V08-06` 最小 CI Quality Gate
+- [x] `V08-06` 最小 CI Quality Gate
   - 自動執行 ESLint、TypeScript、Next build、OpenNext build、Wrangler dry-run。
   - 失敗時阻止發布。
   - 驗收：CI 成功與故意失敗案例各一份紀錄。
   - GitHub Actions、Release boundary、typecheck、build、OpenNext、Wrangler checks 已建立；等待 push 後首次 hosted CI evidence。
+  - main commit `0811a25` 的 GitHub Actions run `29568711140` 全 step PASS；V08-06 DONE，無 deployment step。
 
 ## V0.8 出口條件
 

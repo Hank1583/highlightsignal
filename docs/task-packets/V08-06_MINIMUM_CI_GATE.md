@@ -1,6 +1,6 @@
 # Task Packet — V08-06 Minimum CI Gate
 
-Status: IMPLEMENTED_LOCAL_PENDING_FIRST_CI_RUN
+Status: DONE
 Milestone: V0.8 Release Safety  
 Dependencies: `V08-01`–`V08-05`  
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`

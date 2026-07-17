@@ -1,6 +1,6 @@
 # V08-06 Minimum CI gate
 
-Status: IMPLEMENTED_LOCAL_PENDING_FIRST_CI_RUN
+Status: DONE
 Date: 2026-07-17
 
 The GitHub Actions workflow runs on pull requests, every branch push including main, and manual dispatch with read-only repository permission. It cannot deploy because it receives no Cloudflare token or production secret. Both Wrangler commands include `--dry-run` and write output beneath ignored `.wrangler/` directories.
@@ -30,3 +30,7 @@ PHP syntax lint is intentionally absent because the owner requires URL-only veri
 The full Node/OpenNext gate, Worker binding type check, startup analysis, Release boundary self-test, and both named-environment Wrangler deploy dry-runs passed on 2026-07-17. Both Wrangler commands stopped at the explicit dry-run boundary; no Worker was deployed. V08-06 remains pending only for the first hosted GitHub Actions run and the owner-accepted PHP lint omission.
 
 The first GitHub Desktop publish updated main directly while the initial workflow excluded main pushes, so GitHub correctly reported zero runs. The trigger was corrected to cover all pushes and manual dispatch; permissions and dry-run-only deployment commands remain unchanged.
+
+## Hosted CI evidence
+
+GitHub Actions run [29568711140](https://github.com/Hank1583/highlightsignal/actions/runs/29568711140) completed successfully for main commit `0811a25` on 2026-07-17. Locked install, Release boundary, negative fixtures, ESLint, TypeScript, Next build, OpenNext build, Worker binding types, startup analysis, staging dry-run, and production dry-run all concluded `success`. No deployment step or credential was present.
