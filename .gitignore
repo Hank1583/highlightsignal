@@ -21,6 +21,16 @@
 # production
 /build
 
+# PHP backend: api/sql are canonical; backup and runtime secrets are local only
+/backend/backup/
+/backend/api/.env
+/backend/api/storage/
+/backend/api/vendor/
+/backend/api/ga/report/config.php
+/backend/api/si/seo/business-agent-*.json
+/.dev-*.log
+!/backend/api/.env.example
+
 # misc
 .DS_Store
 *.pem
