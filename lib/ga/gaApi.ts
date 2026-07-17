@@ -1,14 +1,20 @@
 import { highlightPhpApiUrl } from "@/lib/config";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 const BASE_URL = highlightPhpApiUrl("ga");
 
 /** GA Connections */
-export async function getGAConnections(memberId: number) {
-  const res = await fetch(`${BASE_URL}/get_connections.php`, {
+export async function getGAConnections(
+  memberId: number,
+  includeInactive = false
+) {
+  const res = await fetchWithTimeout(`${BASE_URL}/get_connections.php`, {
     headers: {
       "X-Member-Id": String(memberId),
+      ...(includeInactive ? { "X-Include-Inactive": "1" } : {}),
     },
-  });
+    cache: "no-store",
+  }, 8_000);
   // console.log("res:"+memberId+":"+res);
 
   const text = await res.text();
@@ -27,6 +33,31 @@ export async function getGAConnections(memberId: number) {
   return json.data;
 }
 
+export async function updateGAConnectionStatus(
+  memberId: number,
+  connectionId: number,
+  status: 0 | 1
+) {
+  const res = await fetch(`${BASE_URL}/update_connection_status.php`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Member-Id": String(memberId),
+    },
+    body: JSON.stringify({
+      connection_id: connectionId,
+      status,
+    }),
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json?.ok) {
+    throw new Error(json?.message || "Unable to update GA connection");
+  }
+
+  return json.data;
+}
+
 /** GA Query */
 export async function gaQuery(
   memberId: number,
@@ -38,14 +69,14 @@ export async function gaQuery(
   }
 ) {
   // console.log(params);
-  const res = await fetch(`${BASE_URL}/get_query.php`, {
+  const res = await fetchWithTimeout(`${BASE_URL}/get_query.php`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Member-Id": String(memberId),
     },
     body: JSON.stringify(params),
-  });
+  }, 10_000);
 
   const text = await res.text();
 

@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";
 import { getServerSession } from "@/lib/serverSession";
 import { phpGetSeoSummary } from "@/lib/seo/seoApi";
-
-function hasSiAccess(enabledProducts: string[]) {
-  return enabledProducts.includes("si") || enabledProducts.includes("seo");
-}
+import { hasSearchIntelligenceAccess } from "@/lib/subscription";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +16,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!hasSiAccess(session.enabledProducts)) {
+    if (!hasSearchIntelligenceAccess(session)) {
       return NextResponse.json(
         {
           ok: false,
@@ -31,9 +29,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const workspace = await resolveWorkspaceContext(req, session);
     const body = await req.json();
     const siteId = Number(body.site_id);
-    const force = Boolean(body.force);
+    const force = body.force === true;
 
     if (force && isDemoSession(session)) {
       return NextResponse.json(
@@ -45,7 +44,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!siteId) {
+    if (!Number.isSafeInteger(siteId) || siteId <= 0) {
       return NextResponse.json(
         {
           ok: false,
@@ -58,7 +57,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const data = await phpGetSeoSummary(Number(session.id), siteId, { force });
+    const data = await phpGetSeoSummary(workspace.legacyOwnerMemberId, siteId, { force });
     return NextResponse.json(data);
   } catch (error) {
     console.error("POST /api/seo/summary error:", error);

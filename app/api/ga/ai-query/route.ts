@@ -1,5 +1,7 @@
 import { getServerSession } from "@/lib/serverSession";
 import { gaQuery } from "@/lib/ga/gaApi";
+import { hasGaAccess } from "@/lib/subscription";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
 type DateRange = {
   start: string;
@@ -219,9 +221,7 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, message: "Unauthorized" }, { status: 401 });
   }
 
-  const hasGaAccess = session.enabledProducts.includes("ga");
-
-  if (!hasGaAccess) {
+  if (!hasGaAccess(session)) {
     return Response.json(
       { ok: false, message: "This account does not have GA access" },
       { status: 403 }
@@ -253,6 +253,8 @@ export async function POST(req: Request) {
   const intent = getIntent(question);
 
   try {
+    const workspace = await resolveWorkspaceContext(req, session);
+    const memberId = workspace.legacyOwnerMemberId;
     const [
       currentDaily,
       previousDaily,
@@ -263,49 +265,49 @@ export async function POST(req: Request) {
       currentConversions,
       previousConversions,
     ] = await Promise.all([
-      gaQuery(Number(session.id), {
+      gaQuery(memberId, {
         type: "daily",
         ids: selectedIds,
         start: analysisRange.start,
         end: analysisRange.end,
       }) as Promise<DailyRow[]>,
-      gaQuery(Number(session.id), {
+      gaQuery(memberId, {
         type: "daily",
         ids: selectedIds,
         start: previousRange.start,
         end: previousRange.end,
       }) as Promise<DailyRow[]>,
-      gaQuery(Number(session.id), {
+      gaQuery(memberId, {
         type: "sources",
         ids: selectedIds,
         start: analysisRange.start,
         end: analysisRange.end,
       }) as Promise<SourceRow[]>,
-      gaQuery(Number(session.id), {
+      gaQuery(memberId, {
         type: "sources",
         ids: selectedIds,
         start: previousRange.start,
         end: previousRange.end,
       }) as Promise<SourceRow[]>,
-      gaQuery(Number(session.id), {
+      gaQuery(memberId, {
         type: "pages",
         ids: selectedIds,
         start: analysisRange.start,
         end: analysisRange.end,
       }) as Promise<PageRow[]>,
-      gaQuery(Number(session.id), {
+      gaQuery(memberId, {
         type: "pages",
         ids: selectedIds,
         start: previousRange.start,
         end: previousRange.end,
       }) as Promise<PageRow[]>,
-      gaQuery(Number(session.id), {
+      gaQuery(memberId, {
         type: "conversions",
         ids: selectedIds,
         start: analysisRange.start,
         end: analysisRange.end,
       }) as Promise<ConversionRow[]>,
-      gaQuery(Number(session.id), {
+      gaQuery(memberId, {
         type: "conversions",
         ids: selectedIds,
         start: previousRange.start,

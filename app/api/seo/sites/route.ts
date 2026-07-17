@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";
 import { getServerSession } from "@/lib/serverSession";
 import { phpAddSeoSite, phpListSeoSites } from "@/lib/seo/seoApi";
-
-function hasSiAccess(enabledProducts: string[]) {
-  return enabledProducts.includes("si") || enabledProducts.includes("seo");
-}
+import { hasSearchIntelligenceAccess } from "@/lib/subscription";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
 async function requireSeoSession() {
   const session = await getServerSession();
@@ -20,7 +18,7 @@ async function requireSeoSession() {
     };
   }
 
-  if (!hasSiAccess(session.enabledProducts)) {
+  if (!hasSearchIntelligenceAccess(session)) {
     return {
       session: null,
       response: NextResponse.json(
@@ -39,13 +37,14 @@ async function requireSeoSession() {
   return { session, response: null };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const { session, response } = await requireSeoSession();
 
     if (response) return response;
 
-    const data = await phpListSeoSites(Number(session.id));
+    const workspace = await resolveWorkspaceContext(req, session);
+    const data = await phpListSeoSites(workspace.legacyOwnerMemberId);
     return NextResponse.json(data);
   } catch (error) {
     console.error("GET /api/seo/sites error:", error);
@@ -81,9 +80,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
+    const workspace = await resolveWorkspaceContext(req, session);
     const data = await phpAddSeoSite({
       ...body,
-      user_id: Number(session.id),
+      user_id: workspace.legacyOwnerMemberId,
     });
 
     return NextResponse.json(data);

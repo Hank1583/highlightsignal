@@ -67,7 +67,10 @@ export default function UserMenu({ user }: Props) {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex items-center gap-3 rounded-2xl px-3 py-2 transition hover:bg-slate-100"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={`開啟 ${safeUser.name} 的帳號選單`}
+        className="flex items-center gap-3 rounded-2xl px-1 py-2 transition hover:bg-slate-100 sm:px-3"
       >
         <div className="hidden text-right leading-tight sm:block">
           <div className="text-sm font-semibold text-slate-800">
@@ -82,7 +85,7 @@ export default function UserMenu({ user }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div role="menu" className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
           <div className="border-b border-slate-100 px-4 py-3">
             <div className="text-sm font-semibold text-slate-900">
               {safeUser.name}

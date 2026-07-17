@@ -27,9 +27,27 @@ export type ServerSession = {
   isDemo?: boolean;
 };
 
-export async function getServerSession(): Promise<ServerSession | null> {
+function tokensFromCookieHeader(request?: Request) {
+  const header = request?.headers.get("cookie") || "";
+  return header
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith("token="))
+    .map((part) => {
+      try {
+        return decodeURIComponent(part.slice("token=".length));
+      } catch {
+        return part.slice("token=".length);
+      }
+    });
+}
+
+export async function getServerSession(request?: Request): Promise<ServerSession | null> {
   const tokenStore = await cookies();
-  const tokens = tokenStore.getAll("token").map((cookie) => cookie.value);
+  const tokens = Array.from(new Set([
+    ...tokenStore.getAll("token").map((cookie) => cookie.value),
+    ...tokensFromCookieHeader(request),
+  ]));
 
   if (tokens.length === 0) {
     return null;

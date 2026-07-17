@@ -3,7 +3,9 @@ import { highlightPhpApiUrl } from "@/lib/config";
 import { isDemoSession } from "@/lib/demo";
 import { gaQuery, getGAConnections } from "@/lib/ga/gaApi";
 import { phpGetSeoSummary, phpListSeoSites } from "@/lib/seo/seoApi";
-import { getServerSession, phpAuthHeaders } from "@/lib/serverSession";
+import { getServerSession, phpAuthHeaders, type ServerSession } from "@/lib/serverSession";
+import { hasGaAccess, hasSearchIntelligenceAccess } from "@/lib/subscription";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 import {
   checkDashboardAiQuota,
   recordDashboardAiUsage,
@@ -190,14 +192,6 @@ function planDays(plan: DashboardPlan, question: string) {
   return Number.isFinite(days) ? Math.min(Math.max(Math.round(days), 1), 365) : 30;
 }
 
-function hasProduct(enabledProducts: string[], product: "ga" | "si") {
-  if (product === "si" && enabledProducts.includes("seo")) {
-    return true;
-  }
-
-  return enabledProducts.includes(product);
-}
-
 function dateLabel(value: string) {
   return value.slice(5, 10);
 }
@@ -372,12 +366,12 @@ async function requestPlan(question: string, sessionHeaders: HeadersInit) {
 
 async function getGaData(
   memberId: number,
-  enabledProducts: string[],
+  session: ServerSession,
   start: string,
   end: string,
   days: number
 ) {
-  if (!hasProduct(enabledProducts, "ga")) {
+  if (!hasGaAccess(session)) {
     return {
       overview: {
         enabled: false,
@@ -454,8 +448,8 @@ async function getGaData(
   }
 }
 
-async function getSeoData(memberId: number, enabledProducts: string[]) {
-  if (!hasProduct(enabledProducts, "si")) {
+async function getSeoData(memberId: number, session: ServerSession) {
+  if (!hasSearchIntelligenceAccess(session)) {
     return {
       overview: {
         enabled: false,
@@ -726,11 +720,12 @@ export async function POST(req: Request) {
     const start = dateDaysAgo(days);
     const end = today();
     const rangeLabel = `${start} - ${end}`;
-    const memberId = Number(session.id);
+    const workspace = await resolveWorkspaceContext(req, session);
+    const memberId = workspace.legacyOwnerMemberId;
 
     const [ga, seo] = await Promise.all([
-      getGaData(memberId, session.enabledProducts, start, end, days),
-      getSeoData(memberId, session.enabledProducts),
+      getGaData(memberId, session, start, end, days),
+      getSeoData(memberId, session),
     ]);
 
     const blocks = plan.modules.map((module) =>

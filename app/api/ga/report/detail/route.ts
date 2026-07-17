@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getGaReportDetail } from "@/lib/ga/gaApi";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,7 +28,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await getGaReportDetail(user.id, id);
+    const workspace = await resolveWorkspaceContext(req, user);
+    const result = await getGaReportDetail(workspace.legacyOwnerMemberId, id);
 
     return NextResponse.json(result);
   } catch (error) {

@@ -2,10 +2,7 @@ import { NextResponse } from "next/server";
 import { SignJWT } from "jose";
 import { getJwtSecret } from "@/lib/jwtSecret";
 import { DEMO_EMAIL, getDemoMemberId, isDemoEmail } from "@/lib/demo";
-import {
-  normalizeEnabledProducts,
-  type ProductKey,
-} from "@/lib/products";
+import { type ProductKey } from "@/lib/products";
 
 type SubscribedApp = {
   app_id: string;
@@ -94,6 +91,28 @@ function nullableNumber(value: unknown) {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
+const fullAccessProducts: ProductKey[] = ["dashboard", "ga", "si", "ads"];
+const dashboardOnlyProducts: ProductKey[] = ["dashboard"];
+const activeSubscriptionPlans = new Set([
+  "starter",
+  "pro",
+  "business",
+  "demo",
+]);
+
+function enabledProductsFromSubscription(subscription: unknown): ProductKey[] {
+  const plan = nullableString(subscription)
+    ?.trim()
+    .toLowerCase()
+    .replace(/^highlightsignal[_-]/, "");
+
+  if (plan && activeSubscriptionPlans.has(plan)) {
+    return fullAccessProducts;
+  }
+
+  return dashboardOnlyProducts;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -106,11 +125,8 @@ export async function POST(req: Request) {
         name: "Highlight Demo",
         role: "viewer",
         subscription: "demo",
-        enabledProducts: ["dashboard", "ga", "si"],
-        subscribedApps: [
-          { app_id: "highlightsignal-ga", expire_at: "2099-12-31" },
-          { app_id: "highlightsignal-si", expire_at: "2099-12-31" },
-        ],
+        enabledProducts: fullAccessProducts,
+        subscribedApps: [],
         expireDate: "2099-12-31",
         daysLeft: null,
         loginAt: new Date().toISOString().slice(0, 19).replace("T", " "),
@@ -127,11 +143,8 @@ export async function POST(req: Request) {
           subscription: "demo",
           expire_date: "2099-12-31",
           days_left: null,
-          subscribed_apps: [
-            { app_id: "highlightsignal-ga", expire_at: "2099-12-31" },
-            { app_id: "highlightsignal-si", expire_at: "2099-12-31" },
-          ],
-          enabledProducts: ["dashboard", "ga", "si"],
+          subscribed_apps: [],
+          enabledProducts: fullAccessProducts,
           isDemo: true,
         },
       });
@@ -179,30 +192,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const rawSubscribedApps = Array.isArray(data.subscribed_apps)
-      ? data.subscribed_apps
-      : [];
-    const subscribedApps: SubscribedApp[] = rawSubscribedApps
-      .map((item: unknown) => {
-        const subscribedApp = item as Partial<
-          Record<keyof SubscribedApp, unknown>
-        >;
-
-        return {
-          app_id: nullableString(subscribedApp.app_id) || "",
-          expire_at: nullableString(subscribedApp.expire_at) || "",
-        };
-      })
-      .filter((item: SubscribedApp) => item.app_id);
-
-    const rawEnabledProducts = [
-      ...subscribedApps.map((item) => item.app_id),
-      data.app_id,
-      data.subscription,
-      ...(Array.isArray(data.enabled_products) ? data.enabled_products : []),
-    ];
-
-    const enabledProducts = normalizeEnabledProducts(rawEnabledProducts);
+    const subscribedApps: SubscribedApp[] = [];
+    const enabledProducts = enabledProductsFromSubscription(data.subscription);
 
     // 若帳號有 ads 權限，順便跟 Java 後端換 AdFusion token 包進 JWT。
     // 沒 ads 權限就不打，省一次外部請求。
@@ -251,7 +242,7 @@ export async function POST(req: Request) {
         subscription: data.subscription,
         expire_date: data.expire_date,
         days_left: data.days_left,
-        subscribed_apps: subscribedApps,
+        subscribed_apps: [],
         enabledProducts,
         platform: data.platform,
         ip: data.ip,

@@ -5,9 +5,8 @@ export default function AeoPage() {
     <SiInsightPage
       module="aeo"
       eyebrow="AEO"
-      emptyTitle="AEO 分析"
+      emptyTitle="尚未產生 AEO 分析"
       iconMode="aeo"
     />
   );
 }
-

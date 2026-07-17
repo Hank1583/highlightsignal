@@ -6,14 +6,13 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getJwtSecret } from "@/lib/jwtSecret";
 import { isDemoEmail } from "@/lib/demo";
-import { normalizeEnabledProducts } from "@/lib/products";
 import { verifyAnyToken } from "@/lib/sessionToken";
+import WorkspaceProvider from "@/components/workspace/WorkspaceProvider";
 
 type Session = {
   id: string;
   email: string;
   name: string;
-  enabledProducts: string[];
   isDemo?: boolean;
 };
 
@@ -45,7 +44,6 @@ async function getSession(): Promise<Session | null> {
       id: String(payload.id || ""),
       email: String(payload.email || ""),
       name: String(payload.name || ""),
-      enabledProducts: normalizeEnabledProducts(payload.enabledProducts),
       isDemo: Boolean(payload.isDemo) || isDemoEmail(payload.email),
     };
 
@@ -70,16 +68,17 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <AppHeader
-        enabledProducts={session.enabledProducts}
-        user={{
-          name: session.name,
-          email: session.email,
-          isDemo: session.isDemo,
-        }}
-      />
-      <main>{children}</main>
-    </div>
+    <WorkspaceProvider memberId={session.id} memberName={session.name}>
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <AppHeader
+          user={{
+            name: session.name,
+            email: session.email,
+            isDemo: session.isDemo,
+          }}
+        />
+        <main>{children}</main>
+      </div>
+    </WorkspaceProvider>
   );
 }

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJwtSecret } from "@/lib/jwtSecret";
-import { hasProductAccess } from "@/lib/products";
 import { clearTokenCookie, verifyAnyToken } from "@/lib/sessionToken";
 
 const protectedPrefixes = [
@@ -14,25 +13,10 @@ const protectedPrefixes = [
   "/admin",
 ];
 
-const routePermissionMap: Record<string, string> = {
-  "/ga": "ga",
-  "/si": "si",
-  "/seo": "si",
-  "/ads": "ads",
-};
-
 function isProtectedPath(pathname: string) {
   return protectedPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
-}
-
-function getRequiredProduct(pathname: string) {
-  const matched = Object.keys(routePermissionMap)
-    .sort((a, b) => b.length - a.length)
-    .find((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-
-  return matched ? routePermissionMap[matched] : null;
 }
 
 export async function middleware(req: NextRequest) {
@@ -60,14 +44,6 @@ export async function middleware(req: NextRequest) {
 
     if (pathname === "/admin" || pathname.startsWith("/admin/")) {
       if (payload.role !== "admin") {
-        return NextResponse.redirect(new URL("/dashboard", req.url));
-      }
-    }
-
-    const requiredProduct = getRequiredProduct(pathname);
-
-    if (requiredProduct) {
-      if (!hasProductAccess(payload.enabledProducts, requiredProduct as "ga" | "si" | "ads")) {
         return NextResponse.redirect(new URL("/dashboard", req.url));
       }
     }

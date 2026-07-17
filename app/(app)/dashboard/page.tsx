@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import DashboardWorkspace from "@/components/dashboard/DashboardWorkspace";
 import { gaQuery, getGAConnections } from "@/lib/ga/gaApi";
 import { phpGetSeoSummary, phpListSeoSites } from "@/lib/seo/seoApi";
 import { getServerSession, type ServerSession } from "@/lib/serverSession";
+import { hasGaAccess, hasSearchIntelligenceAccess } from "@/lib/subscription";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
 type GaConnection = {
   id: number | string;
@@ -24,36 +27,49 @@ type GaConversionRow = {
 type GaOverview = {
   enabled: boolean;
   connected: boolean;
+  status: "ready" | "not_connected" | "error";
   users: number;
   sessions: number;
   pageviews: number;
   conversions: number;
   message: string;
-  trend: {
-    label: string;
-    users: number;
-    sessions: number;
-  }[];
+  trend: { label: string; users: number; sessions: number }[];
 };
 
 type SeoOverview = {
   enabled: boolean;
   connected: boolean;
+  status: "ready" | "not_connected" | "error";
   siteCount: number;
   score: number | null;
   issues: number;
   opportunities: number;
   message: string;
+  comparison: {
+    available: boolean;
+    scoreBefore: number;
+    scoreAfter: number;
+    issuesBefore: number;
+    issuesAfter: number;
+    fixed: number;
+    added: number;
+    remaining: number;
+  } | null;
 };
 
 function dateDaysAgo(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date.toISOString().slice(0, 10);
+  return dateOffset(today(), -days);
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function numberValue(value: unknown) {
@@ -66,76 +82,61 @@ function dateLabel(value: string) {
 }
 
 function dateOffset(start: string, index: number) {
-  const date = new Date(`${start}T00:00:00`);
-  date.setDate(date.getDate() + index);
+  const [year, month, day] = start.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + index);
   return date.toISOString().slice(0, 10);
 }
 
-function trendLabel(row: GaDailyRow, index: number, start: string) {
+function trendDate(row: GaDailyRow, index: number, start: string) {
   const raw = row.date || row.day || row.event_date;
-  if (typeof raw === "string" && raw.length >= 10) {
-    return dateLabel(raw);
-  }
-
-  return dateLabel(dateOffset(start, index));
+  return typeof raw === "string" && raw.length >= 10 ? raw.slice(0, 10) : dateOffset(start, index);
 }
 
 function buildTrendRows(dailyRows: GaDailyRow[], start: string, days: number) {
-  const rows = dailyRows.map((row, index) => ({
-    label: trendLabel(row, index, start),
-    users: numberValue(row.users),
-    sessions: numberValue(row.sessions),
-  }));
+  const grouped = new Map<string, { users: number; sessions: number }>();
 
-  if (rows.length >= days) {
-    return rows.slice(0, days);
-  }
+  dailyRows.forEach((row, index) => {
+    const date = trendDate(row, index, start);
+    const current = grouped.get(date) || { users: 0, sessions: 0 };
+    current.users += numberValue(row.users);
+    current.sessions += numberValue(row.sessions);
+    grouped.set(date, current);
+  });
 
-  const existing = new Set(rows.map((row) => row.label));
-  const padded = [...rows];
-
-  for (let index = 0; index < days; index += 1) {
-    const label = dateLabel(dateOffset(start, index));
-    if (!existing.has(label)) {
-      padded.push({ label, users: 0, sessions: 0 });
-    }
-  }
-
-  return padded.slice(0, days);
+  return Array.from({ length: days }, (_, index) => {
+    const date = dateOffset(start, index);
+    const values = grouped.get(date) || { users: 0, sessions: 0 };
+    return { label: dateLabel(date), ...values };
+  });
 }
 
-function hasProduct(session: ServerSession, product: "ga" | "si") {
-  if (product === "si" && session.enabledProducts.includes("seo")) {
-    return true;
-  }
-
-  return session.enabledProducts.includes(product);
-}
-
-async function getGaOverview(session: ServerSession): Promise<GaOverview> {
-  if (!hasProduct(session, "ga")) {
+async function getGaOverview(session: ServerSession, memberId: number): Promise<GaOverview> {
+  if (!hasGaAccess(session)) {
     return {
       enabled: false,
       connected: false,
+      status: "not_connected",
       users: 0,
       sessions: 0,
       pageviews: 0,
       conversions: 0,
-      message: "尚未啟用 GA 數據分析。",
+      message: "尚未啟用網站成效模組。",
       trend: [],
     };
   }
 
   try {
-    const start = dateDaysAgo(30);
+    const start = dateDaysAgo(29);
     const end = today();
-    const connections = (await getGAConnections(Number(session.id))) as GaConnection[];
+    const connections = (await getGAConnections(memberId)) as GaConnection[];
     const ids = connections.map((item) => Number(item.id)).filter(Boolean);
 
     if (ids.length === 0) {
       return {
         enabled: true,
         connected: false,
+        status: "not_connected",
         users: 0,
         sessions: 0,
         pageviews: 0,
@@ -146,23 +147,14 @@ async function getGaOverview(session: ServerSession): Promise<GaOverview> {
     }
 
     const [dailyRows, conversionRows] = await Promise.all([
-      gaQuery(Number(session.id), {
-        type: "daily",
-        ids,
-        start,
-        end,
-      }) as Promise<GaDailyRow[]>,
-      gaQuery(Number(session.id), {
-        type: "conversions",
-        ids,
-        start,
-        end,
-      }) as Promise<GaConversionRow[]>,
+      gaQuery(memberId, { type: "daily", ids, start, end }) as Promise<GaDailyRow[]>,
+      gaQuery(memberId, { type: "conversions", ids, start, end }) as Promise<GaConversionRow[]>,
     ]);
 
     return {
       enabled: true,
       connected: true,
+      status: "ready",
       users: dailyRows.reduce((sum, row) => sum + numberValue(row.users), 0),
       sessions: dailyRows.reduce((sum, row) => sum + numberValue(row.sessions), 0),
       pageviews: dailyRows.reduce((sum, row) => sum + numberValue(row.pageviews), 0),
@@ -174,6 +166,7 @@ async function getGaOverview(session: ServerSession): Promise<GaOverview> {
     return {
       enabled: true,
       connected: false,
+      status: "error",
       users: 0,
       sessions: 0,
       pageviews: 0,
@@ -184,54 +177,73 @@ async function getGaOverview(session: ServerSession): Promise<GaOverview> {
   }
 }
 
-async function getSeoOverview(session: ServerSession): Promise<SeoOverview> {
-  if (!hasProduct(session, "si")) {
+async function getSeoOverview(session: ServerSession, memberId: number): Promise<SeoOverview> {
+  if (!hasSearchIntelligenceAccess(session)) {
     return {
       enabled: false,
       connected: false,
+      status: "not_connected",
       siteCount: 0,
       score: null,
       issues: 0,
       opportunities: 0,
-      message: "尚未啟用 Search Intelligence。",
+      comparison: null,
+      message: "尚未啟用搜尋與 AI 成效模組。",
     };
   }
 
   try {
-    const sitesResponse = await phpListSeoSites(Number(session.id));
+    const sitesResponse = await phpListSeoSites(memberId);
     const sites = sitesResponse.ok ? sitesResponse.data || [] : [];
 
     if (sites.length === 0) {
       return {
         enabled: true,
         connected: false,
+        status: "not_connected",
         siteCount: 0,
         score: null,
         issues: 0,
         opportunities: 0,
+        comparison: null,
         message: "尚未新增 SEO 站點。",
       };
     }
 
-    const summary = await phpGetSeoSummary(Number(session.id), Number(sites[0].id));
+    const summary = await phpGetSeoSummary(memberId, Number(sites[0].id));
 
     return {
       enabled: true,
       connected: true,
+      status: "ready",
       siteCount: sites.length,
       score: summary.data?.health?.score ?? null,
       issues: summary.data?.technicalIssues?.length || 0,
       opportunities: summary.data?.topOpportunities?.length || 0,
-      message: `已追蹤 ${sites.length} 個網站。`,
+      comparison: summary.data?.comparison
+        ? {
+            available: summary.data.comparison.available,
+            scoreBefore: summary.data.comparison.health_score.before,
+            scoreAfter: summary.data.comparison.health_score.after,
+            issuesBefore: summary.data.comparison.issues.before,
+            issuesAfter: summary.data.comparison.issues.after,
+            fixed: summary.data.comparison.issues.fixed,
+            added: summary.data.comparison.issues.added,
+            remaining: summary.data.comparison.issues.remaining,
+          }
+        : null,
+      message: `已新增 ${sites.length} 個 SEO 站點。`,
     };
   } catch (error) {
     return {
       enabled: true,
       connected: false,
+      status: "error",
       siteCount: 0,
       score: null,
       issues: 0,
       opportunities: 0,
+      comparison: null,
       message: error instanceof Error ? error.message : "SEO API 讀取失敗。",
     };
   }
@@ -239,21 +251,32 @@ async function getSeoOverview(session: ServerSession): Promise<SeoOverview> {
 
 export default async function DashboardPage() {
   const session = await getServerSession();
+  if (!session) redirect("/auth/login");
 
-  if (!session) {
-    redirect("/auth/login");
+  const selectedWorkspaceId = Number((await cookies()).get("hs_workspace_id")?.value || session.id);
+  const contextRequest = new Request("http://internal/dashboard", {
+    headers: { "X-Workspace-Id": String(selectedWorkspaceId) },
+  });
+
+  let dataMemberId = Number(session.id);
+  try {
+    const workspace = await resolveWorkspaceContext(contextRequest, session);
+    dataMemberId = workspace.legacyOwnerMemberId;
+  } catch {
+    // A stale workspace cookie must not prevent the dashboard from loading.
   }
 
   const [ga, seo] = await Promise.all([
-    getGaOverview(session),
-    getSeoOverview(session),
+    getGaOverview(session, dataMemberId),
+    getSeoOverview(session, dataMemberId),
   ]);
 
   return (
     <DashboardWorkspace
       ga={ga}
       seo={seo}
-      rangeLabel={`${dateDaysAgo(30)} - ${today()}`}
+      rangeLabel={`${dateDaysAgo(29)} - ${today()}`}
+      updatedAt={new Date().toISOString()}
     />
   );
 }

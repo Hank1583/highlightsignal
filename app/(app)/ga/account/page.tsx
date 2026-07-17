@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import PageHeader from "@/components/ga/PageHeader";
 import SectionCard from "@/components/ga/SectionCard";
-import { highlightPhpApiUrl } from "@/lib/config";
-import { useGAConnections } from "../dataSource";
+import {
+  updateGAConnectionForWorkspace,
+  useGAConnections,
+} from "../dataSource";
+import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 
 type User = {
   id: number;
@@ -37,13 +40,19 @@ function getLastDays(days: number): DateRange {
 }
 
 export default function AccountPage() {
-  const { gaConnections, loading, error } = useGAConnections();
+  const { currentWorkspace } = useWorkspace();
+  const { gaConnections, loading, error, refresh } = useGAConnections({
+    includeInactive: true,
+  });
   const [user, setUser] = useState<User | null>(null);
   const [syncRange, setSyncRange] = useState<DateRange>(() => getLastDays(90));
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncFrameUrl, setSyncFrameUrl] = useState<string | null>(null);
+  const [updatingIds, setUpdatingIds] = useState<number[]>([]);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -69,7 +78,7 @@ export default function AccountPage() {
   }, []);
 
   const accountFetchLink = user?.id
-    ? highlightPhpApiUrl(`ga/account_fetch.php?member_id=${user.id}`)
+    ? `/api/ga/account-link?workspace_id=${currentWorkspace.id}`
     : null;
 
   const isInvalidRange =
@@ -84,7 +93,7 @@ export default function AccountPage() {
     if (!canSync || syncing) return;
 
     const params = new URLSearchParams({
-      member_id: String(user?.id),
+      workspace_id: String(currentWorkspace.id),
       start: syncRange.start,
       end: syncRange.end,
       t: String(Date.now()),
@@ -93,7 +102,7 @@ export default function AccountPage() {
     setSyncing(true);
     setSyncMessage(null);
     setSyncError(null);
-    setSyncFrameUrl(highlightPhpApiUrl(`ga/data_sync.php?${params.toString()}`));
+    setSyncFrameUrl(`/api/ga/sync?${params.toString()}`);
   };
 
   const handleSyncFrameLoad = () => {
@@ -103,6 +112,33 @@ export default function AccountPage() {
     setSyncMessage(
       `Synced GA data from ${syncRange.start} to ${syncRange.end}.`
     );
+  };
+
+  const handleStatusChange = async (connectionId: number, status: 0 | 1) => {
+    if (user?.isDemo || updatingIds.includes(connectionId)) return;
+
+    setUpdatingIds((ids) => [...ids, connectionId]);
+    setStatusMessage(null);
+    setStatusError(null);
+
+    try {
+      await updateGAConnectionForWorkspace(
+        currentWorkspace,
+        connectionId,
+        status
+      );
+
+      await refresh();
+      setStatusMessage(
+        status === 1
+          ? "已開啟，這個 GA 帳號會顯示於 Dashboard。"
+          : "已關閉，這個 GA 帳號不會顯示於 Dashboard。"
+      );
+    } catch (err: any) {
+      setStatusError(err?.message || "無法更新 GA 帳號狀態");
+    } finally {
+      setUpdatingIds((ids) => ids.filter((id) => id !== connectionId));
+    }
   };
 
   return (
@@ -120,8 +156,6 @@ export default function AccountPage() {
         ) : accountFetchLink ? (
           <a
             href={accountFetchLink}
-            target="_blank"
-            rel="noopener noreferrer"
             className="inline-flex items-center rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
           >
             綁定 GA 帳號
@@ -235,17 +269,40 @@ export default function AccountPage() {
       {!loading && !error && gaConnections.length > 0 && (
         <SectionCard
           title="GA 帳號清單"
-          description={`共 ${gaConnections.length} 個帳號`}
+          description={`共 ${gaConnections.length} 個帳號；開啟的帳號會顯示於 Dashboard 並參與資料同步。`}
         >
+          {statusMessage && (
+            <div
+              role="status"
+              className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800"
+            >
+              {statusMessage}
+            </div>
+          )}
+
+          {statusError && (
+            <div
+              role="alert"
+              className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
+            >
+              {statusError}
+            </div>
+          )}
+
           <div className="space-y-3">
             {gaConnections.map((item) => {
-              const status = item.status || "ACTIVE";
-              const isDisabled = status === "DISABLED";
+              const isActive = Number(item.status) === 1;
+              const isUpdating = updatingIds.includes(item.id);
 
               return (
                 <div
                   key={item.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 md:flex-row md:items-center md:justify-between"
+                  className={[
+                    "flex flex-col gap-3 rounded-2xl border p-4 md:flex-row md:items-center md:justify-between",
+                    isActive
+                      ? "border-slate-200 bg-white"
+                      : "border-slate-200 bg-slate-50",
+                  ].join(" ")}
                 >
                   <div className="min-w-0">
                     <div className="truncate text-base font-bold text-slate-900">
@@ -265,13 +322,36 @@ export default function AccountPage() {
                     <span
                       className={[
                         "rounded-full px-3 py-1 text-xs font-bold",
-                        isDisabled
-                          ? "bg-slate-100 text-slate-600"
-                          : "bg-emerald-50 text-emerald-700",
+                        isActive
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-slate-200 text-slate-600",
                       ].join(" ")}
                     >
-                      {status}
+                      {isActive ? "ACTIVE" : "INACTIVE"}
                     </span>
+
+                    <button
+                      type="button"
+                      disabled={Boolean(user?.isDemo) || isUpdating}
+                      onClick={() =>
+                        handleStatusChange(item.id, isActive ? 0 : 1)
+                      }
+                      className={[
+                        "rounded-xl px-4 py-2 text-sm font-bold transition-colors",
+                        isActive
+                          ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                          : "bg-blue-600 text-white hover:bg-blue-700",
+                        user?.isDemo || isUpdating
+                          ? "cursor-not-allowed opacity-60"
+                          : "",
+                      ].join(" ")}
+                    >
+                      {isUpdating
+                        ? "儲存中..."
+                        : isActive
+                          ? "關閉"
+                          : "開啟"}
+                    </button>
                   </div>
                 </div>
               );

@@ -1,19 +1,26 @@
 "use client";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
+  AlertTriangle,
+  ArrowRight,
+  Check,
+  Monitor,
   Plus,
   RefreshCw,
-  TrendingUp,
   ShieldCheck,
-  AlertTriangle,
-  Monitor,
   Smartphone,
+  Sparkles,
+  Target,
+  TrendingUp,
 } from "lucide-react";
 import type { SeoSite, SeoSummaryResponse } from "@/lib/seo/types";
 import AddSeoSiteDialog from "@/components/seo/AddSeoSiteDialog";
 import { formatAnalysisDate } from "@/lib/formatAnalysisDate";
+import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
+import { workspaceHeaders } from "@/lib/workspaceFetch";
 
 type SummaryData = SeoSummaryResponse["data"];
 type PageSpeedStrategy = "mobile" | "desktop";
@@ -33,35 +40,24 @@ type PageSpeedData = {
   metrics: PageSpeedMetric[];
   fetchedAt: string;
 };
-type PageSpeedCache = Record<string, PageSpeedData>;
-type CurrentUser = {
-  id: number;
-  isDemo?: boolean;
+type SeoWorkflow = {
+  task: { id: number; status: string; steps: Array<{ id: number; title: string; status: "pending" | "completed" }> } | null;
+  outcome: { status: string } | null;
 };
 
-const PAGESPEED_CACHE_KEY = "highlightsignal:seo:pagespeed-cache";
-
 const seoTabs = [
-  { key: "overview", label: "SEO 總覽", href: "/si/seo" },
-  { key: "keywords", label: "關鍵字機會", href: "/si/seo?tab=keywords" },
-  { key: "technical", label: "技術與 AI 建議", href: "/si/seo?tab=technical" },
+  { key: "overview", label: "1. 總覽", href: "/si/seo" },
+  { key: "technical", label: "2. 技術問題", href: "/si/seo?tab=technical" },
+  { key: "keywords", label: "3. 關鍵字機會", href: "/si/seo?tab=keywords" },
 ];
 
 async function parseJsonSafe<T>(res: Response): Promise<T> {
   const text = await res.text();
-
-  if (!text) {
-    throw new Error(
-      `API 回傳空內容，status=${res.status} statusText=${res.statusText} url=${res.url}`
-    );
-  }
-
+  if (!text) throw new Error(`API 回傳空內容。status=${res.status} url=${res.url}`);
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw new Error(
-      `API 回傳不是合法 JSON，status=${res.status} url=${res.url} body=${text}`
-    );
+    throw new Error(`API 未回傳有效 JSON。status=${res.status} url=${res.url}`);
   }
 }
 
@@ -69,171 +65,130 @@ function getErrorMessage(json: any, fallback: string) {
   return json?.error?.message || json?.message || fallback;
 }
 
-function pageSpeedCacheKey(url: string, strategy: PageSpeedStrategy) {
-  return `${strategy}:${url.trim().toLowerCase()}`;
+function scoreTone(score: number | null | undefined) {
+  if (score === null || score === undefined) return "text-slate-400";
+  if (score >= 90) return "text-emerald-600";
+  if (score >= 50) return "text-amber-600";
+  return "text-rose-600";
 }
 
-function readPageSpeedCache(): PageSpeedCache {
-  if (typeof window === "undefined") return {};
-
-  try {
-    const raw = window.sessionStorage.getItem(PAGESPEED_CACHE_KEY);
-    if (!raw) return {};
-
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
+function severityClass(severity: string) {
+  if (severity === "HIGH") return "bg-rose-100 text-rose-700";
+  if (severity === "MEDIUM") return "bg-amber-100 text-amber-700";
+  return "bg-blue-100 text-blue-700";
 }
 
-function writePageSpeedCache(cache: PageSpeedCache) {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.sessionStorage.setItem(PAGESPEED_CACHE_KEY, JSON.stringify(cache));
-  } catch {
-    // Session cache is a convenience only; ignore storage failures.
-  }
+function metricTone(status: PageSpeedMetric["status"]) {
+  if (status === "good") return "text-emerald-700";
+  if (status === "average") return "text-amber-700";
+  if (status === "poor") return "text-rose-700";
+  return "text-slate-700";
 }
 
 export default function SeoPage() {
+  const { currentWorkspace } = useWorkspace();
+  const workspaceId = currentWorkspace.id;
   const searchParams = useSearchParams();
   const rawTab = searchParams.get("tab") || "overview";
   const tab = rawTab === "issues" || rawTab === "ai" ? "technical" : rawTab;
+  const activeSeoTab = seoTabs.find((item) => item.key === tab) || seoTabs[0];
 
-  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [user, setUser] = useState<{ id: number; isDemo?: boolean } | null>(null);
   const [sites, setSites] = useState<SeoSite[]>([]);
   const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
   const [summary, setSummary] = useState<SummaryData | null>(null);
-
   const [loadingSites, setLoadingSites] = useState(false);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [errorText, setErrorText] = useState("");
-  const [pageSpeedStrategy, setPageSpeedStrategy] =
-    useState<PageSpeedStrategy>("mobile");
+  const [workflow, setWorkflow] = useState<Record<string, SeoWorkflow>>({});
+  const [workflowBusy, setWorkflowBusy] = useState("");
+  const [workflowError, setWorkflowError] = useState("");
+  const [pageSpeedStrategy, setPageSpeedStrategy] = useState<PageSpeedStrategy>("mobile");
   const [pageSpeed, setPageSpeed] = useState<PageSpeedData | null>(null);
   const [pageSpeedHistory, setPageSpeedHistory] = useState<PageSpeedData[]>([]);
-  const [pageSpeedCache, setPageSpeedCache] = useState<PageSpeedCache>({});
   const [loadingPageSpeed, setLoadingPageSpeed] = useState(false);
   const [loadingPageSpeedHistory, setLoadingPageSpeedHistory] = useState(false);
   const [pageSpeedError, setPageSpeedError] = useState("");
   const isDemo = Boolean(user?.isDemo);
 
-  useEffect(() => {
-    let alive = true;
+  const selectedSite = useMemo(
+    () => sites.find((site) => site.id === selectedSiteId) || null,
+    [sites, selectedSiteId]
+  );
 
-    fetch("/api/auth/me", { credentials: "include", cache: "no-store" })
-      .then((r) => r.json())
-      .then((res) => {
-        if (!alive) return;
-        setUser(res?.ok && res?.data?.id ? res.data : null);
-      })
-      .catch(() => {
-        if (!alive) return;
-        setUser(null);
+  const workflowRequest = useCallback(
+    async (contextKey: string, body: Record<string, unknown>) => {
+      const response = await fetch(`/api/workspaces/${workspaceId}/dashboard/workflow`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context_key: contextKey, ...body }),
       });
-
-    return () => {
-      alive = false;
-    };
-  }, []);
+      const json = await parseJsonSafe<{ ok: boolean; data?: SeoWorkflow; error?: { message?: string } }>(response);
+      if (!response.ok || !json.ok || !json.data) throw new Error(getErrorMessage(json, "工作流程更新失敗。"));
+      setWorkflow((current) => ({ ...current, [contextKey]: json.data! }));
+      return json.data;
+    },
+    [workspaceId]
+  );
 
   const loadSites = useCallback(async () => {
     try {
       setLoadingSites(true);
       setErrorText("");
-
-      const res = await fetch("/api/seo/sites", {
+      const response = await fetch("/api/seo/sites", {
         method: "GET",
+        headers: workspaceHeaders(workspaceId),
         cache: "no-store",
       });
-
-      const json = await parseJsonSafe<{ ok: boolean; data: SeoSite[]; error?: any }>(res);
-
-      if (!res.ok || !json.ok) {
-        throw new Error(getErrorMessage(json, "取得站點失敗"));
-      }
-
+      const json = await parseJsonSafe<{ ok: boolean; data: SeoSite[]; error?: any }>(response);
+      if (!response.ok || !json.ok) throw new Error(getErrorMessage(json, "讀取 SEO 站點失敗。"));
       setSites(json.data);
-
-      setSelectedSiteId((prev) => {
-        if (prev) return prev;
-        return json.data.length > 0 ? json.data[0].id : null;
-      });
+      setSelectedSiteId((current) => current || json.data[0]?.id || null);
     } catch (error) {
-      console.error(error);
-      setErrorText(error instanceof Error ? error.message : "載入站點失敗");
+      setErrorText(error instanceof Error ? error.message : "讀取 SEO 站點失敗。");
     } finally {
       setLoadingSites(false);
     }
-  }, []);
+  }, [workspaceId]);
 
   const loadSummary = useCallback(
     async (siteId: number, options?: { force?: boolean }) => {
       if (options?.force && isDemo) return;
-
       try {
         setLoadingSummary(true);
         setErrorText("");
-
-        const res = await fetch("/api/seo/summary", {
+        const response = await fetch("/api/seo/summary", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "X-Workspace-Id": String(workspaceId),
           },
-          body: JSON.stringify({
-            site_id: siteId,
-            force: Boolean(options?.force),
-          }),
+          body: JSON.stringify({ site_id: siteId, force: Boolean(options?.force) }),
           cache: "no-store",
         });
-
-        const json = await parseJsonSafe<SeoSummaryResponse>(res);
-
-        if (!res.ok || !json.ok) {
-          throw new Error(getErrorMessage(json, "載入分析失敗"));
-        }
-
+        const json = await parseJsonSafe<SeoSummaryResponse>(response);
+        if (!response.ok || !json.ok) throw new Error(getErrorMessage(json, "讀取 SEO summary 失敗。"));
         setSummary(json.data);
       } catch (error) {
-        console.error(error);
         setSummary(null);
-        setErrorText(error instanceof Error ? error.message : "載入分析失敗");
+        setErrorText(error instanceof Error ? error.message : "讀取 SEO summary 失敗。");
       } finally {
         setLoadingSummary(false);
       }
     },
-    [isDemo]
+    [isDemo, workspaceId]
   );
-
-  useEffect(() => {
-    loadSites();
-  }, [loadSites]);
-
-  useEffect(() => {
-    setPageSpeedCache(readPageSpeedCache());
-  }, []);
-
-  useEffect(() => {
-    if (selectedSiteId) {
-      loadSummary(selectedSiteId);
-    }
-  }, [selectedSiteId, loadSummary]);
-
-  const selectedSite = useMemo(() => {
-    return sites.find((site) => site.id === selectedSiteId) || null;
-  }, [sites, selectedSiteId]);
 
   const loadPageSpeedHistory = useCallback(
     async (siteId: number, strategy: PageSpeedStrategy) => {
       try {
         setLoadingPageSpeedHistory(true);
-        const res = await fetch("/api/seo/pagespeed", {
+        const response = await fetch("/api/seo/pagespeed", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "X-Workspace-Id": String(workspaceId),
           },
           body: JSON.stringify({
             site_id: siteId,
@@ -248,10 +203,10 @@ export default function SeoPage() {
           data?: PageSpeedData[];
           error?: { message?: string };
           message?: string;
-        }>(res);
+        }>(response);
 
-        if (!res.ok || !json.ok || !Array.isArray(json.data)) {
-          throw new Error(getErrorMessage(json, "PageSpeed 歷史紀錄載入失敗"));
+        if (!response.ok || !json.ok || !Array.isArray(json.data)) {
+          throw new Error(getErrorMessage(json, "讀取 PageSpeed 歷史紀錄失敗。"));
         }
 
         setPageSpeedHistory(json.data);
@@ -261,431 +216,455 @@ export default function SeoPage() {
         setLoadingPageSpeedHistory(false);
       }
     },
-    []
+    [workspaceId]
   );
 
   const loadPageSpeed = useCallback(
-    async (
-      url: string,
-      strategy: PageSpeedStrategy,
-      options?: { siteId?: number | null; refresh?: boolean }
-    ) => {
+    async (url: string, strategy: PageSpeedStrategy, options?: { refresh?: boolean }) => {
       if (options?.refresh && isDemo) return;
-
       try {
         setLoadingPageSpeed(true);
         setPageSpeedError("");
-
-        const res = await fetch("/api/seo/pagespeed", {
+        const response = await fetch("/api/seo/pagespeed", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "X-Workspace-Id": String(workspaceId),
           },
           body: JSON.stringify({
             url,
             strategy,
-            site_id: options?.siteId,
+            site_id: selectedSiteId,
             refresh: options?.refresh ?? true,
           }),
           cache: "no-store",
         });
-
-        const json = await parseJsonSafe<{
-          ok: boolean;
-          data?: PageSpeedData;
-          error?: { message?: string };
-          message?: string;
-        }>(res);
-
-        if (!res.ok || !json.ok || !json.data) {
-          throw new Error(getErrorMessage(json, "PageSpeed 跑分失敗"));
-        }
-
+        const json = await parseJsonSafe<{ ok: boolean; data?: PageSpeedData; error?: { message?: string }; message?: string }>(response);
+        if (!response.ok || !json.ok || !json.data) throw new Error(getErrorMessage(json, "PageSpeed 檢測失敗。"));
         setPageSpeed(json.data);
-        setPageSpeedCache((current) => {
-          const next = {
-            ...current,
-            [pageSpeedCacheKey(json.data!.url, json.data!.strategy)]: json.data!,
-          };
-          writePageSpeedCache(next);
-          return next;
-        });
-        if (options?.siteId) {
-          void loadPageSpeedHistory(options.siteId, strategy);
+        if (selectedSiteId) {
+          void loadPageSpeedHistory(selectedSiteId, strategy);
         }
       } catch (error) {
-        setPageSpeedError(
-          error instanceof Error ? error.message : "PageSpeed 跑分失敗"
-        );
+        setPageSpeedError(error instanceof Error ? error.message : "PageSpeed 檢測失敗。");
       } finally {
         setLoadingPageSpeed(false);
       }
     },
-    [isDemo, loadPageSpeedHistory]
+    [isDemo, loadPageSpeedHistory, selectedSiteId, workspaceId]
   );
 
-  const loadLatestPageSpeed = useCallback(
-    async (siteId: number, strategy: PageSpeedStrategy) => {
+  const createIssueTask = useCallback(
+    async (issue: SummaryData["technicalIssues"][number]) => {
+      if (!selectedSiteId || isDemo) return;
+      const contextKey = `seo:${selectedSiteId}:${issue.type}`;
       try {
-        setLoadingPageSpeed(true);
-        setPageSpeedError("");
-
-        const res = await fetch("/api/seo/pagespeed", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
+        setWorkflowBusy(contextKey);
+        setWorkflowError("");
+        await workflowRequest(contextKey, {
+          action: "create_task",
+          title: `修復 SEO 技術問題：${issue.type}`,
+          description: `${issue.message}\nURL：${issue.url}\nAI 建議：${issue.recommendation || "請依照 SEO 檢測結果修正後重新掃描。"}`,
+          steps: [
+            { title: "確認受影響頁面", description: issue.url },
+            { title: "依照建議修正技術問題", description: issue.recommendation || issue.message },
+            { title: "重新掃描並確認改善結果", description: "完成修正後重新產生 SEO summary。" },
+          ],
+          baseline: {
+            seo_score: summary?.health.score ?? 0,
+            seo_issues: summary?.technicalIssues.length ?? 0,
           },
-          body: JSON.stringify({
-            site_id: siteId,
-            strategy,
-            cacheOnly: true,
-          }),
-          cache: "no-store",
         });
-
-        const json = await parseJsonSafe<{
-          ok: boolean;
-          data?: PageSpeedData | null;
-          error?: { message?: string };
-          message?: string;
-        }>(res);
-
-        if (!res.ok || !json.ok) {
-          throw new Error(getErrorMessage(json, "讀取上次 PageSpeed 跑分失敗"));
-        }
-
-        setPageSpeed(json.data || null);
-
-        if (json.data) {
-          setPageSpeedCache((current) => {
-            const next = {
-              ...current,
-              [pageSpeedCacheKey(json.data!.url, json.data!.strategy)]: json.data!,
-            };
-            writePageSpeedCache(next);
-            return next;
-          });
-        }
       } catch (error) {
-        setPageSpeed(null);
-        setPageSpeedError(
-          error instanceof Error ? error.message : "讀取上次 PageSpeed 跑分失敗"
-        );
+        setWorkflowError(error instanceof Error ? error.message : "建立任務失敗。");
       } finally {
-        setLoadingPageSpeed(false);
+        setWorkflowBusy("");
       }
     },
-    []
+    [isDemo, selectedSiteId, summary, workflowRequest]
+  );
+
+  const toggleIssueStep = useCallback(
+    async (contextKey: string, taskId: number, stepId: number, completed: boolean, issueType: string) => {
+      try {
+        setWorkflowBusy(`${contextKey}:${stepId}`);
+        setWorkflowError("");
+        await workflowRequest(contextKey, {
+          action: "update_step",
+          title: `修復 SEO 技術問題：${issueType}`,
+          task_id: taskId,
+          step_id: stepId,
+          completed,
+        });
+      } catch (error) {
+        setWorkflowError(error instanceof Error ? error.message : "更新任務步驟失敗。");
+      } finally {
+        setWorkflowBusy("");
+      }
+    },
+    [workflowRequest]
   );
 
   useEffect(() => {
-    const url = selectedSite?.site_url;
-    const cached = url
-      ? pageSpeedCache[pageSpeedCacheKey(url, pageSpeedStrategy)]
-      : null;
-
-    setPageSpeed(cached || null);
-    setPageSpeedError("");
-
-    if (!cached && selectedSiteId) {
-      void loadLatestPageSpeed(selectedSiteId, pageSpeedStrategy);
-    }
-  }, [
-    loadLatestPageSpeed,
-    pageSpeedCache,
-    pageSpeedStrategy,
-    selectedSite?.site_url,
-    selectedSiteId,
-  ]);
+    let alive = true;
+    fetch("/api/auth/me", { credentials: "include", cache: "no-store" })
+      .then((response) => response.json())
+      .then((result) => {
+        if (alive) setUser(result?.ok && result?.data?.id ? result.data : null);
+      })
+      .catch(() => {
+        if (alive) setUser(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
+    loadSites();
+  }, [loadSites]);
+
+  useEffect(() => {
+    if (selectedSiteId) loadSummary(selectedSiteId);
+  }, [selectedSiteId, loadSummary]);
+
+  useEffect(() => {
+    setPageSpeed(null);
+    setPageSpeedError("");
     if (selectedSiteId) {
       void loadPageSpeedHistory(selectedSiteId, pageSpeedStrategy);
     } else {
       setPageSpeedHistory([]);
     }
-  }, [loadPageSpeedHistory, pageSpeedStrategy, selectedSiteId]);
+  }, [loadPageSpeedHistory, selectedSiteId, pageSpeedStrategy]);
+
+  const issueCount = summary?.technicalIssues.length ?? 0;
+  const hasIssues = issueCount > 0;
+  const createdTaskCount = Object.values(workflow).filter((item) => item.task).length;
+  const primaryActionHref = hasIssues ? "/si/seo?tab=technical" : "/si/seo?tab=keywords";
+  const primaryActionLabel = hasIssues ? "查看技術問題" : "查看關鍵字機會";
+  const primaryRecommendation =
+    summary?.suggestions[0]?.reason ||
+    (hasIssues
+      ? "先處理高風險技術問題，再重新掃描確認 SEO 分數與問題數是否改善。"
+      : "目前沒有明顯技術問題，可以把重點放在關鍵字機會與內容擴充。");
 
   return (
     <>
       <div className="space-y-6">
         <header className="flex flex-col gap-4 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
-            <div className="mb-2 text-sm font-medium text-slate-500">
-              Search Intelligence / SEO
-            </div>
+            <div className="mb-2 text-sm font-medium text-slate-500">搜尋健康度 / SEO</div>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                SEO 管理中心
-              </h1>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">搜尋健康度</h1>
               <select
                 value={selectedSiteId ?? ""}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setSelectedSiteId(value ? Number(value) : null);
-                }}
+                onChange={(event) => setSelectedSiteId(event.target.value ? Number(event.target.value) : null)}
                 disabled={loadingSites || sites.length === 0}
-                className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-900 lg:w-72"
+                className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 lg:w-72"
               >
-                {loadingSites ? (
-                  <option value="">載入網站中...</option>
-                ) : sites.length === 0 ? (
-                  <option value="">尚未新增網站</option>
-                ) : (
-                  sites.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {site.site_name || site.site_url}
-                    </option>
-                  ))
-                )}
+                {sites.length === 0 ? <option value="">尚未新增站點</option> : null}
+                {sites.map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.site_name || site.site_url}
+                  </option>
+                ))}
               </select>
             </div>
-            <p className="mt-2 text-sm text-slate-500">
-              管理網站、查看關鍵字機會，並把技術問題與 AI 建議整理成優先順序。
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
+              檢查網站搜尋健康度、技術問題、關鍵字機會與 PageSpeed 表現，並把可執行項目送回決策中心。
             </p>
           </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (selectedSiteId) loadSummary(selectedSiteId, { force: true });
-              }}
-              disabled={!selectedSiteId || loadingSummary || isDemo}
-              className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <RefreshCw size={16} />
-              重新整理
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setDialogOpen(true)} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white">
+              <Plus className="h-4 w-4" />
+              新增網站
             </button>
-
             <button
               type="button"
-              onClick={() => {
-                if (!isDemo) setDialogOpen(true);
-              }}
-              disabled={isDemo}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              onClick={() => selectedSiteId && loadSummary(selectedSiteId, { force: true })}
+              disabled={!selectedSiteId || loadingSummary || isDemo}
+              className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-50"
             >
-              <Plus size={16} />
-              新增連結
+              <RefreshCw className={`h-4 w-4 ${loadingSummary ? "animate-spin" : ""}`} />
+              重新掃描
             </button>
           </div>
         </header>
 
-        <nav className="flex gap-2 overflow-x-auto rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-          {seoTabs.map((item) => {
-            const active = tab === item.key;
-
-            return (
-              <Link
-                key={item.key}
-                href={item.href}
-                className={[
-                  "whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold transition",
-                  active
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-                ].join(" ")}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="flex flex-wrap gap-2">
+          {seoTabs.map((item) => (
+            <Link
+              key={item.key}
+              href={item.href}
+              className={`rounded-2xl px-4 py-2 text-sm font-bold ${
+                activeSeoTab.key === item.key ? "bg-blue-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
         </nav>
 
-        {errorText ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {errorText}
-          </div>
-        ) : null}
+        {errorText ? <Notice tone="error" text={errorText} /> : null}
+        {loadingSummary ? <Notice text="正在讀取 SEO 分析..." /> : null}
+        {!loadingSummary && !summary ? <Notice text="請先新增網站，或選擇一個站點產生 SEO summary。" /> : null}
 
-        <section>
-          <div className="space-y-6">
-            {!selectedSite ? (
-              <div className="rounded-3xl bg-white p-8 text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">
-                請先選擇一個網站。
-              </div>
-            ) : loadingSummary ? (
-              <div className="rounded-3xl bg-white p-8 text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">
-                載入 SEO 分析中...
-              </div>
-            ) : !summary ? (
-              <div className="rounded-3xl bg-white p-8 text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">
-                目前沒有分析資料。
-              </div>
-            ) : (
-              <>
-                <section className="grid gap-4 md:grid-cols-3">
-                  <ScoreCard
-                    title="SEO 總分"
-                    value={summary.health.score}
-                    icon={<TrendingUp size={18} />}
-                  />
-                  <ScoreCard
-                    title="技術分數"
-                    value={summary.health.breakdown.tech}
-                    icon={<ShieldCheck size={18} />}
-                  />
-                  <ScoreCard
-                    title="內容分數"
-                    value={summary.health.breakdown.content ?? "-"}
-                    icon={<AlertTriangle size={18} />}
-                  />
-                </section>
+        {summary ? (
+          <>
+            <section className="grid gap-4 md:grid-cols-4">
+              <ScoreCard title="SEO Health" value={summary.health.score} icon={<ShieldCheck className="h-5 w-5" />} score={summary.health.score} />
+              <ScoreCard title="技術問題" value={summary.technicalIssues.length} icon={<AlertTriangle className="h-5 w-5" />} />
+              <ScoreCard title="關鍵字" value={summary.keywords.length} icon={<TrendingUp className="h-5 w-5" />} />
+              <ScoreCard title="已建立任務" value={createdTaskCount} icon={<Target className="h-5 w-5" />} />
+            </section>
 
-                {summary.meta.updated_at ? (
-                  <p className="-mt-3 text-xs font-semibold text-slate-500">
-                    SEO 分析日期：{formatAnalysisDate(summary.meta.updated_at)}
-                    （台北時間）
+            <section className="rounded-3xl border border-blue-100 bg-blue-50/70 p-6">
+              <div className="flex gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-blue-700">AI Summary</p>
+                  <h2 className="mt-2 text-2xl font-black text-slate-950">{primaryRecommendation}</h2>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">
+                    最近分析：{formatAnalysisDate(summary.meta.updated_at)}，資料來源：{summary.meta.source}
                   </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="grid gap-5 lg:grid-cols-[1fr_260px] lg:items-center">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-violet-700">
+                    <Target className="h-4 w-4" />
+                    Top Recommendation
+                  </div>
+                  <h2 className="mt-3 text-xl font-black text-slate-950">{summary.suggestions[0]?.title || primaryActionLabel}</h2>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">{primaryRecommendation}</p>
+                </div>
+                <Link href={primaryActionHref} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-black text-white hover:bg-violet-700">
+                  {primaryActionLabel}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </section>
+
+            {activeSeoTab.key === "overview" ? (
+              <div className="grid gap-6 xl:grid-cols-2">
+                <InfoCard title="SEO 分數拆解">
+                  <div className="space-y-3">
+                    <MetricRow label="技術健康度" value={summary.health.breakdown.tech} />
+                    <MetricRow label="內容健康度" value={summary.health.breakdown.content ?? "-"} />
+                    <MetricRow label="Search Console" value={summary.meta.gsc.ok ? "可讀取" : "待設定"} />
+                  </div>
+                </InfoCard>
+
+                <InfoCard title="AI 建議">
+                  {summary.suggestions.length === 0 ? (
+                    <EmptyText text="目前沒有新的 AI 建議。" />
+                  ) : (
+                    <div className="space-y-3">
+                      {summary.suggestions.map((item) => (
+                        <div key={item.rule} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="text-sm font-semibold text-slate-900">{item.title}</div>
+                          <div className="mt-2 text-sm leading-6 text-slate-600">{item.reason}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </InfoCard>
+              </div>
+            ) : null}
+
+            {activeSeoTab.key === "technical" ? (
+              <div className="space-y-6">
+                {summary.comparison?.available ? (
+                  <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6">
+                    <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Before / After</p>
+                    <h2 className="mt-2 text-xl font-black text-slate-950">重新掃描已產生改善比較</h2>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {formatAnalysisDate(summary.comparison.previous_scanned_at)} → {formatAnalysisDate(summary.comparison.current_scanned_at)}
+                    </p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                      <MiniStat label="健康分數" value={`${summary.comparison.health_score.before} → ${summary.comparison.health_score.after}`} change={summary.comparison.health_score.change} />
+                      <MiniStat label="問題數" value={`${summary.comparison.issues.before} → ${summary.comparison.issues.after}`} change={summary.comparison.issues.before - summary.comparison.issues.after} />
+                      <MiniStat label="已修復" value={summary.comparison.issues.fixed} change={summary.comparison.issues.fixed} />
+                      <MiniStat label="新增" value={summary.comparison.issues.added} change={-summary.comparison.issues.added} />
+                      <MiniStat label="剩餘" value={summary.comparison.issues.remaining} change={-summary.comparison.issues.remaining} />
+                    </div>
+                  </section>
                 ) : null}
 
-                <PageSpeedPanel
-                  data={pageSpeed}
-                  history={pageSpeedHistory}
-                  error={pageSpeedError}
-                  loading={loadingPageSpeed}
-                  loadingHistory={loadingPageSpeedHistory}
-                  strategy={pageSpeedStrategy}
-                  onStrategyChange={setPageSpeedStrategy}
-                  onRefresh={() => {
-                    if (selectedSite.site_url) {
-                      loadPageSpeed(selectedSite.site_url, pageSpeedStrategy, {
-                        siteId: selectedSiteId,
-                        refresh: true,
-                      });
-                    }
-                  }}
-                  disabled={isDemo}
-                />
+                {workflowError ? <Notice tone="error" text={workflowError} /> : null}
 
-                {tab === "overview" && (
-                  <section className="grid gap-6">
-                    <InfoCard title="網站資訊">
-                      <div className="space-y-2 text-sm">
-                        <div>
-                          <span className="text-slate-400">網站：</span>
-                          <span className="font-medium text-slate-900">{summary.site}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400">最後更新：</span>
-                          <span className="font-medium text-slate-900">
-                            {summary.meta.updated_at}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400">資料來源：</span>
-                          <span className="font-medium text-slate-900">
-                            {summary.meta.source}
-                          </span>
-                        </div>
-                      </div>
-                    </InfoCard>
-
-                    <InfoCard title="Top Opportunities">
-                      <div className="space-y-3">
-                        {summary.topOpportunities.length === 0 ? (
-                          <EmptyText text="目前沒有可優化機會" />
-                        ) : (
-                          summary.topOpportunities.map((item) => (
-                            <div
-                              key={item.keyword}
-                              className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                            >
-                              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                <div className="font-semibold text-slate-900">{item.keyword}</div>
-                                <div className="text-xs text-slate-500">
-                                  排名 {item.position} ・ 曝光 {item.impressions} ・ 點擊 {item.clicks}
-                                </div>
-                              </div>
-
-                              {"recommendation" in item && item.recommendation && (
-                                <div className="mt-2 text-sm text-slate-600">
-                                  建議：{item.recommendation}
-                                </div>
-                              )}
-
-                              {"recommendations" in item &&
-                                Array.isArray(item.recommendations) &&
-                                item.recommendations.length > 0 && (
-                                  <ul className="mt-3 space-y-1 text-sm text-slate-600">
-                                    {item.recommendations.map((rec) => (
-                                      <li key={rec}>• {rec}</li>
-                                    ))}
-                                  </ul>
-                                )}
+                <InfoCard title="技術問題與修復任務">
+                  {summary.technicalIssues.length === 0 ? (
+                    <EmptyText text="目前沒有明顯技術問題。" />
+                  ) : (
+                    <div className="space-y-3">
+                      {summary.technicalIssues.map((issue) => {
+                        const contextKey = `seo:${selectedSiteId}:${issue.type}`;
+                        const itemWorkflow = workflow[contextKey];
+                        return (
+                          <div key={`${issue.type}-${issue.url}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-sm font-semibold text-slate-900">{issue.type}</div>
+                              <span className={`rounded-full px-2 py-1 text-[10px] font-black ${severityClass(issue.severity)}`}>
+                                {issue.severity}
+                              </span>
                             </div>
-                          ))
-                        )}
-                      </div>
-                    </InfoCard>
-                  </section>
-                )}
-
-                {tab === "keywords" && (
-                  <section className="grid gap-6 xl:grid-cols-3">
-                    <KeywordPanel title="PUSH" items={summary.pushKeywords} />
-                    <KeywordPanel title="DEFEND" items={summary.defendKeywords} />
-                    <KeywordPanel title="WATCH" items={summary.watchKeywords} />
-                  </section>
-                )}
-
-                {tab === "technical" && (
-                  <section className="grid gap-6 xl:grid-cols-2">
-                    <InfoCard title="技術問題">
-                      {summary.technicalIssues.length === 0 ? (
-                        <EmptyText text="目前沒有技術問題" />
-                      ) : (
-                        <div className="space-y-3">
-                          {summary.technicalIssues.map((issue) => (
-                            <div
-                              key={`${issue.type}-${issue.url}`}
-                              className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                            >
-                              <div className="mb-1 text-sm font-semibold text-slate-900">
-                                {issue.type}
-                              </div>
-                              <div className="text-sm text-slate-600">{issue.message}</div>
-                              <div className="mt-2 text-xs text-slate-400">{issue.url}</div>
+                            <div className="mt-2 text-sm text-slate-600">{issue.message}</div>
+                            <div className="mt-2 break-all text-xs text-slate-400">{issue.url}</div>
+                            <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50 p-3 text-xs leading-5 text-violet-900">
+                              <span className="font-black">AI 修復建議：</span>
+                              {issue.recommendation || "請依照檢測結果修正後重新掃描。"}
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </InfoCard>
-
-                    <InfoCard title="AI 建議">
-                      {summary.suggestions.length === 0 ? (
-                        <EmptyText text="目前沒有 AI 建議" />
-                      ) : (
-                        <div className="space-y-3">
-                          {summary.suggestions.map((item) => (
-                            <div
-                              key={item.rule}
-                              className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                            >
-                              <div className="text-sm font-semibold text-slate-900">
-                                {item.title}
+                            {!itemWorkflow?.task ? (
+                              <button
+                                type="button"
+                                onClick={() => void createIssueTask(issue)}
+                                disabled={isDemo || workflowBusy === contextKey}
+                                className="mt-3 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+                              >
+                                <Target className="h-3.5 w-3.5" />
+                                {workflowBusy === contextKey ? "建立中..." : "建立 Dashboard 任務"}
+                              </button>
+                            ) : (
+                              <div className="mt-3 space-y-2">
+                                <p className="text-xs font-black text-emerald-700">Dashboard 任務已建立</p>
+                                {itemWorkflow.task.steps.map((step) => (
+                                  <button
+                                    key={step.id}
+                                    type="button"
+                                    onClick={() => void toggleIssueStep(contextKey, itemWorkflow.task!.id, step.id, step.status !== "completed", issue.type)}
+                                    disabled={workflowBusy === `${contextKey}:${step.id}`}
+                                    className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-bold ${
+                                      step.status === "completed"
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                        : "border-slate-200 bg-white text-slate-700"
+                                    }`}
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                    {step.title}
+                                  </button>
+                                ))}
                               </div>
-                              <div className="mt-2 text-sm text-slate-600">{item.reason}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </InfoCard>
-                  </section>
-                )}
-              </>
-            )}
-          </div>
-        </section>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </InfoCard>
+              </div>
+            ) : null}
+
+            {activeSeoTab.key === "keywords" ? (
+              <div className="grid gap-6 xl:grid-cols-3">
+                <KeywordPanel title="可推進關鍵字" items={summary.pushKeywords} />
+                <KeywordPanel title="需防守關鍵字" items={summary.defendKeywords} />
+                <KeywordPanel title="觀察關鍵字" items={summary.watchKeywords} />
+              </div>
+            ) : null}
+
+            <PageSpeedPanel
+              data={pageSpeed}
+              history={pageSpeedHistory}
+              error={pageSpeedError}
+              loading={loadingPageSpeed}
+              loadingHistory={loadingPageSpeedHistory}
+              strategy={pageSpeedStrategy}
+              onStrategyChange={setPageSpeedStrategy}
+              onRefresh={() => selectedSite?.site_url && void loadPageSpeed(selectedSite.site_url, pageSpeedStrategy, { refresh: true })}
+              disabled={!selectedSite?.site_url}
+            />
+          </>
+        ) : null}
       </div>
 
-      <AddSeoSiteDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        onSuccess={loadSites}
-      />
+      <AddSeoSiteDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSuccess={loadSites} />
     </>
+  );
+}
+
+function Notice({ text, tone = "default" }: { text: string; tone?: "default" | "error" }) {
+  return (
+    <div className={`rounded-3xl border p-6 text-sm font-semibold shadow-sm ${tone === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-white text-slate-500"}`}>
+      {text}
+    </div>
+  );
+}
+
+function ScoreCard({ title, value, icon, score }: { title: string; value: string | number; icon: React.ReactNode; score?: number }) {
+  return (
+    <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="text-sm font-medium text-slate-500">{title}</div>
+        <div className="text-slate-400">{icon}</div>
+      </div>
+      <div className={`text-4xl font-bold tracking-tight ${score === undefined ? "text-slate-900" : scoreTone(score)}`}>{value}</div>
+    </div>
+  );
+}
+
+function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      <div className="mb-4 text-lg font-semibold text-slate-900">{title}</div>
+      {children}
+    </section>
+  );
+}
+
+function MetricRow({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+      <span className="text-sm font-bold text-slate-600">{label}</span>
+      <span className="text-sm font-black text-slate-950">{value}</span>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, change }: { label: string; value: string | number; change: number }) {
+  return (
+    <div className="rounded-xl border border-white bg-white p-4 shadow-sm">
+      <p className="text-xs font-bold text-slate-500">{label}</p>
+      <p className="mt-2 text-xl font-black text-slate-950">{value}</p>
+      <p className={`mt-1 text-xs font-bold ${change > 0 ? "text-emerald-600" : change < 0 ? "text-rose-600" : "text-slate-400"}`}>
+        {change > 0 ? "+" : ""}
+        {change}
+      </p>
+    </div>
+  );
+}
+
+function KeywordPanel({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ keyword: string; position: number | null; impressions: number; clicks: number; ctr?: number }>;
+}) {
+  return (
+    <InfoCard title={title}>
+      {items.length === 0 ? (
+        <EmptyText text="目前沒有資料。" />
+      ) : (
+        <div className="space-y-3">
+          {items.map((item) => (
+            <div key={item.keyword} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="font-medium text-slate-900">{item.keyword}</div>
+              <div className="mt-2 text-xs leading-5 text-slate-500">
+                排名 {item.position ?? "-"} / 曝光 {item.impressions} / 點擊 {item.clicks}
+                {typeof item.ctr === "number" ? ` / CTR ${item.ctr}%` : ""}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </InfoCard>
   );
 }
 
@@ -710,57 +689,21 @@ function PageSpeedPanel({
   onRefresh: () => void;
   disabled?: boolean;
 }) {
-  const score = data?.score ?? null;
-  const scoreTone = getScoreTone(score);
-  const circumference = 2 * Math.PI * 48;
-  const offset =
-    score === null ? circumference : circumference - (score / 100) * circumference;
-
   return (
     <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <div className="text-sm font-medium text-slate-500">
-            網站速度檢測
-          </div>
-          <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-900">
-            SEO 效能跑分
-          </h2>
+          <div className="text-sm font-medium text-slate-500">PageSpeed / Lighthouse</div>
+          <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-900">網站速度檢測</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            依照 Google Lighthouse 效能模型檢查載入速度、互動阻塞與版面穩定度。
+            檢查行動版與桌面版速度分數，協助判斷技術 SEO 與使用者體驗風險。
           </p>
         </div>
-
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-2xl bg-slate-100 p-1">
-            <button
-              type="button"
-              onClick={() => onStrategyChange("mobile")}
-              className={[
-                "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition",
-                strategy === "mobile"
-                  ? "bg-white text-slate-950 shadow-sm"
-                  : "text-slate-500 hover:text-slate-900",
-              ].join(" ")}
-            >
-              <Smartphone size={16} />
-              行動裝置
-            </button>
-            <button
-              type="button"
-              onClick={() => onStrategyChange("desktop")}
-              className={[
-                "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition",
-                strategy === "desktop"
-                  ? "bg-white text-slate-950 shadow-sm"
-                  : "text-slate-500 hover:text-slate-900",
-              ].join(" ")}
-            >
-              <Monitor size={16} />
-              電腦
-            </button>
+            <StrategyButton active={strategy === "mobile"} onClick={() => onStrategyChange("mobile")} icon={<Smartphone size={16} />} label="行動版" />
+            <StrategyButton active={strategy === "desktop"} onClick={() => onStrategyChange("desktop")} icon={<Monitor size={16} />} label="桌面版" />
           </div>
-
           <button
             type="button"
             onClick={onRefresh}
@@ -768,114 +711,38 @@ function PageSpeedPanel({
             className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-            {data ? "重新跑分" : "開始跑分"}
+            {data ? "重新檢測" : "開始檢測"}
           </button>
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)] xl:items-center">
-        <div className="flex flex-col items-center rounded-2xl bg-slate-50 p-5">
-          <div className="relative h-36 w-36">
-            <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
-              <circle
-                cx="60"
-                cy="60"
-                r="48"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="10"
-                className="text-slate-200"
-              />
-              <circle
-                cx="60"
-                cy="60"
-                r="48"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="10"
-                strokeLinecap="round"
-                strokeDasharray={circumference}
-                strokeDashoffset={offset}
-                className={scoreTone.ring}
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className={`text-4xl font-bold ${scoreTone.text}`}>
-                {loading ? "..." : score ?? "-"}
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 text-base font-semibold text-slate-900">
-            效能分數
-          </div>
-          <div className="mt-2 flex flex-wrap justify-center gap-3 text-xs font-semibold text-slate-500">
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
-              0-49
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-              50-89
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              90-100
-            </span>
-          </div>
+      {error ? <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">{error}</div> : null}
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="rounded-2xl bg-slate-50 p-5 text-center">
+          <div className={`text-5xl font-black ${scoreTone(data?.score)}`}>{loading ? "..." : data?.score ?? "-"}</div>
+          <div className="mt-2 text-sm font-bold text-slate-500">速度分數</div>
+          {data?.fetchedAt ? <div className="mt-2 text-xs text-slate-400">{formatAnalysisDate(data.fetchedAt)}</div> : null}
         </div>
-
-        <div>
-          {error ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-              {error}
+        <div className="grid gap-3 md:grid-cols-2">
+          {(data?.metrics || []).map((metric) => (
+            <div key={metric.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="truncate text-sm font-semibold text-slate-700">{metric.label}</span>
+                <span className={`text-lg font-bold ${metricTone(metric.status)}`}>{metric.value}</span>
+              </div>
             </div>
-          ) : null}
-
-          <div className="grid gap-3 md:grid-cols-2">
-            {(data?.metrics || []).map((metric) => {
-              const tone = getMetricTone(metric.status);
-
-              return (
-                <div
-                  key={metric.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-4"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className={`h-2.5 w-2.5 rounded-full ${tone.dot}`} />
-                      <span className="truncate text-sm font-semibold text-slate-700">
-                        {metric.label}
-                      </span>
-                    </div>
-                    <span className={`text-lg font-bold ${tone.text}`}>
-                      {metric.value}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {!loading && !error && !data ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">
-              尚未取得 PageSpeed 跑分。
-            </div>
-          ) : null}
-
-          {data?.fetchedAt ? (
-            <p className="mt-3 text-xs font-semibold text-slate-400">
-              效能分析日期：{formatAnalysisDate(data.fetchedAt)}（台北時間）
-            </p>
-          ) : null}
+          ))}
+          {!loading && !error && !data ? <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">尚未執行 PageSpeed 檢測。</div> : null}
         </div>
       </div>
 
       <div className="mt-6 border-t border-slate-200 pt-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="font-bold text-slate-900">歷史效能比較</h3>
+            <h3 className="font-bold text-slate-900">歷史紀錄</h3>
             <p className="mt-1 text-sm text-slate-500">
-              最近 10 次 {strategy === "mobile" ? "行動版" : "桌面版"} 跑分。
+              最近 10 次 {strategy === "mobile" ? "行動版" : "桌面版"} PageSpeed 檢測。
             </p>
           </div>
           {history.length >= 2 &&
@@ -886,15 +753,15 @@ function PageSpeedPanel({
         </div>
 
         {loadingHistory ? (
-          <p className="mt-4 text-sm text-slate-500">載入歷史紀錄中...</p>
+          <p className="mt-4 text-sm text-slate-500">正在載入歷史紀錄...</p>
         ) : history.length > 0 ? (
           <div className="mt-4 overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="text-xs font-bold uppercase tracking-wide text-slate-400">
                 <tr>
-                  <th className="px-3 py-2">分析日期</th>
-                  <th className="px-3 py-2">效能分數</th>
-                  <th className="px-3 py-2">與前次差異</th>
+                  <th className="px-3 py-2">檢測時間</th>
+                  <th className="px-3 py-2">分數</th>
+                  <th className="px-3 py-2">變化</th>
                   {history[0].metrics.slice(0, 4).map((metric) => (
                     <th key={metric.id} className="px-3 py-2">
                       {metric.label}
@@ -911,7 +778,7 @@ function PageSpeedPanel({
                       : null;
 
                   return (
-                    <tr key={`${item.fetchedAt}-${index}`} className="text-slate-600">
+                    <tr key={`${item.fetchedAt}-${item.strategy}-${index}`} className="text-slate-600">
                       <td className="whitespace-nowrap px-3 py-3 font-semibold">
                         {formatAnalysisDate(item.fetchedAt)}
                       </td>
@@ -920,15 +787,13 @@ function PageSpeedPanel({
                       </td>
                       <td className="px-3 py-3">
                         {delta === null ? (
-                          <span className="text-slate-300">—</span>
+                          <span className="text-slate-300">-</span>
                         ) : (
                           <ScoreDelta value={delta} compact />
                         )}
                       </td>
                       {history[0].metrics.slice(0, 4).map((metric) => {
-                        const value = item.metrics.find(
-                          (candidate) => candidate.id === metric.id
-                        )?.value;
+                        const value = item.metrics.find((candidate) => candidate.id === metric.id)?.value;
                         return (
                           <td key={metric.id} className="whitespace-nowrap px-3 py-3">
                             {value || "-"}
@@ -943,7 +808,7 @@ function PageSpeedPanel({
           </div>
         ) : (
           <p className="mt-4 text-sm text-slate-500">
-            重新跑分後會開始累積歷史紀錄。
+            尚無歷史紀錄。執行一次 PageSpeed 檢測後，系統會保存紀錄並顯示在這裡。
           </p>
         )}
       </div>
@@ -951,13 +816,7 @@ function PageSpeedPanel({
   );
 }
 
-function ScoreDelta({
-  value,
-  compact = false,
-}: {
-  value: number;
-  compact?: boolean;
-}) {
+function ScoreDelta({ value, compact = false }: { value: number; compact?: boolean }) {
   return (
     <span
       className={`inline-flex rounded-full font-black ${
@@ -976,109 +835,18 @@ function ScoreDelta({
   );
 }
 
-function getScoreTone(score: number | null) {
-  if (score === null) {
-    return { ring: "text-slate-300", text: "text-slate-400" };
-  }
-
-  if (score >= 90) {
-    return { ring: "text-emerald-500", text: "text-emerald-600" };
-  }
-
-  if (score >= 50) {
-    return { ring: "text-amber-500", text: "text-amber-600" };
-  }
-
-  return { ring: "text-rose-500", text: "text-rose-600" };
-}
-
-function getMetricTone(status: PageSpeedMetric["status"]) {
-  if (status === "good") {
-    return { dot: "bg-emerald-500", text: "text-emerald-700" };
-  }
-
-  if (status === "average") {
-    return { dot: "bg-amber-500", text: "text-amber-700" };
-  }
-
-  if (status === "poor") {
-    return { dot: "bg-rose-500", text: "text-rose-700" };
-  }
-
-  return { dot: "bg-slate-300", text: "text-slate-700" };
-}
-
-function ScoreCard({
-  title,
-  value,
-  icon,
-}: {
-  title: string;
-  value: string | number;
-  icon: React.ReactNode;
-}) {
+function StrategyButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
   return (
-    <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-sm font-medium text-slate-500">{title}</div>
-        <div className="text-slate-400">{icon}</div>
-      </div>
-      <div className="text-4xl font-bold tracking-tight text-slate-900">{value}</div>
-    </div>
-  );
-}
-
-function InfoCard({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <div className="mb-4 text-lg font-semibold text-slate-900">{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function KeywordPanel({
-  title,
-  items,
-}: {
-  title: string;
-  items: Array<{
-    keyword: string;
-    position: number | null;
-    impressions: number;
-    clicks: number;
-    ctr?: number;
-  }>;
-}) {
-  return (
-    <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <div className="mb-4 text-lg font-semibold text-slate-900">{title}</div>
-
-      {items.length === 0 ? (
-        <EmptyText text="沒有資料" />
-      ) : (
-        <div className="space-y-3">
-          {items.map((item) => (
-            <div
-              key={item.keyword}
-              className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-            >
-              <div className="font-medium text-slate-900">{item.keyword}</div>
-              <div className="mt-2 text-xs leading-5 text-slate-500">
-                排名 {item.position} ・ 曝光 {item.impressions} ・ 點擊 {item.clicks}
-                {typeof item.ctr === "number" ? ` ・ CTR ${item.ctr}%` : ""}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+        active ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-900"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 

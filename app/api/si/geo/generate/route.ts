@@ -1,26 +1,31 @@
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@/lib/auth";
 import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";
+import { getServerSession } from "@/lib/serverSession";
 import { phpGenerateSiSummary } from "@/lib/si/siApi";
+import { hasSearchIntelligenceAccess } from "@/lib/subscription";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
 export async function POST(req: NextRequest) {
   try {
-    const token = (await cookies()).get("token")?.value;
+    const user = await getServerSession(req);
 
-    if (!token) {
+    if (!user?.id) {
       return NextResponse.json(
         { ok: false, error: { code: "UNAUTHORIZED", message: "Unauthorized" } },
         { status: 401 }
       );
     }
 
-    const user = await verifyToken(token);
-
-    if (!user?.id) {
+    if (!hasSearchIntelligenceAccess(user)) {
       return NextResponse.json(
-        { ok: false, error: { code: "UNAUTHORIZED", message: "Unauthorized" } },
-        { status: 401 }
+        {
+          ok: false,
+          error: {
+            code: "FORBIDDEN",
+            message: "Search Intelligence is not enabled for this account.",
+          },
+        },
+        { status: 403 }
       );
     }
 
@@ -34,6 +39,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const workspace = await resolveWorkspaceContext(req, user);
     const body = await req.json();
     const siteId = Number(body.site_id);
     const tab = typeof body.tab === "string" ? body.tab : "overview";
@@ -50,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     const data = await phpGenerateSiSummary({
       module: "geo",
-      userId: Number(user.id),
+      userId: workspace.legacyOwnerMemberId,
       siteId,
       tab,
     });

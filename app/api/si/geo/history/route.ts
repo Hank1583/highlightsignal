@@ -1,12 +1,12 @@
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@/lib/auth";
+import { getServerSession } from "@/lib/serverSession";
 import { phpGetSiHistory } from "@/lib/si/siApi";
+import { hasSearchIntelligenceAccess } from "@/lib/subscription";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
 export async function POST(req: NextRequest) {
   try {
-    const token = (await cookies()).get("token")?.value;
-    const user = token ? await verifyToken(token) : null;
+    const user = await getServerSession(req);
 
     if (!user?.id) {
       return NextResponse.json(
@@ -15,6 +15,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!hasSearchIntelligenceAccess(user)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "FORBIDDEN",
+            message: "Search Intelligence is not enabled for this account.",
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    const workspace = await resolveWorkspaceContext(req, user);
     const body = await req.json();
     const siteId = Number(body.site_id);
     const tab = typeof body.tab === "string" ? body.tab : "overview";
@@ -31,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     const data = await phpGetSiHistory({
       module: "geo",
-      userId: Number(user.id),
+      userId: workspace.legacyOwnerMemberId,
       siteId,
       tab,
       limit: 10,

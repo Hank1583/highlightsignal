@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { highlightPhpApiUrl } from "@/lib/config";
 import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";
-import { hasProductAccess } from "@/lib/products";
 import { getServerSession } from "@/lib/serverSession";
+import { hasSearchIntelligenceAccess } from "@/lib/subscription";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
 type Strategy = "mobile" | "desktop";
 
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!hasProductAccess(session.enabledProducts, "si")) {
+    if (!hasSearchIntelligenceAccess(session)) {
       return NextResponse.json(
         {
           ok: false,
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const workspace = await resolveWorkspaceContext(req, session);
     const body = await req.json();
     const siteId = Number(body?.site_id || 0);
     const strategy: Strategy = body?.strategy === "desktop" ? "desktop" : "mobile";
@@ -79,7 +81,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         action,
-        user_id: Number(session.id),
+        user_id: workspace.legacyOwnerMemberId,
         site_id: siteId,
         strategy,
         url: body?.url,

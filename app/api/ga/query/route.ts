@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { gaQuery } from "@/lib/ga/gaApi";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
 const ALLOWED_TYPES = [
   "daily",
@@ -73,7 +74,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const data = await gaQuery(user.id, {
+    const workspace = await resolveWorkspaceContext(req, user);
+    const data = await gaQuery(workspace.legacyOwnerMemberId, {
       type,
       ids: ids.map(Number),
       start,

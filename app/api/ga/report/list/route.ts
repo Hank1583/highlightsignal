@@ -1,8 +1,9 @@
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { getGaReportList } from "@/lib/ga/gaApi";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
-export async function GET() {
+export async function GET(req: Request) {
   const token = (await cookies()).get("token")?.value;
 
   if (!token) {
@@ -16,7 +17,8 @@ export async function GET() {
   }
 
   try {
-    const data = await getGaReportList(user.id);
+    const workspace = await resolveWorkspaceContext(req, user);
+    const data = await getGaReportList(workspace.legacyOwnerMemberId);
     return Response.json({ ok: true, data });
   } catch (error: any) {
     return Response.json(

@@ -1,6 +1,8 @@
 "use client";
 
-import {useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
+import type { Workspace } from "@/types/workspace";
 
 /** =========================
  * Types
@@ -15,7 +17,7 @@ export type GAConnection = {
   id: number;
   account_name: string;
   property_id?: string | number;
-  status?: string;
+  status?: string | number;
 };
 
 export type CurrentUser = {
@@ -100,16 +102,46 @@ export type SaveReportPayload = {
  * API helpers
 ========================= */
 
-async function fetchConnections(): Promise<GAConnection[]> {
-  const res = await fetch("/api/ga/connections", {
+async function fetchConnections(
+  workspace: Workspace,
+  includeInactive = false
+): Promise<GAConnection[]> {
+  const legacyUrl = includeInactive
+    ? "/api/ga/connections?include_inactive=1"
+    : "/api/ga/connections";
+  const workspaceUrl =
+    "/api/workspaces/" +
+    workspace.id +
+    "/integrations/ga" +
+    (includeInactive ? "?include_inactive=1" : "");
+  const url = workspace.source === "backend" ? workspaceUrl : legacyUrl;
+  const res = await fetch(url, {
     credentials: "include",
+    headers: { "X-Workspace-Id": String(workspace.id) },
     cache: "no-store",
   });
 
   const json = await res.json();
 
   if (!res.ok || !json?.ok) {
-    throw new Error(json?.message || "fetchConnections failed");
+    if (
+      workspace.source === "backend" &&
+      (res.status === 404 || res.status === 502)
+    ) {
+      const fallback = await fetch(legacyUrl, {
+        credentials: "include",
+        headers: { "X-Workspace-Id": String(workspace.id) },
+        cache: "no-store",
+      });
+      const fallbackJson = await fallback.json();
+      if (fallback.ok && fallbackJson?.ok) {
+        return Array.isArray(fallbackJson.data) ? fallbackJson.data : [];
+      }
+    }
+
+    throw new Error(
+      json?.error?.message || json?.message || "fetchConnections failed"
+    );
   }
 
   return Array.isArray(json.data) ? json.data : [];
@@ -119,7 +151,8 @@ async function fetchQuery<T>(
   type: "daily" | "pages" | "sources" | "events" | "conversions",
   ids: number[],
   start: string,
-  end: string
+  end: string,
+  workspaceId: number
 ): Promise<T[]> {
   if (!ids.length) return [];
 
@@ -131,6 +164,7 @@ async function fetchQuery<T>(
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      "X-Workspace-Id": String(workspaceId),
     },
     body: JSON.stringify(payload),
   });
@@ -149,10 +183,28 @@ async function fetchQuery<T>(
  * Hook: Connections
 ========================= */
 
-export function useGAConnections() {
+export function useGAConnections(options: { includeInactive?: boolean } = {}) {
+  const { currentWorkspace } = useWorkspace();
   const [gaConnections, setGaConnections] = useState<GAConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const includeInactive = Boolean(options.includeInactive);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      setGaConnections(
+        await fetchConnections(currentWorkspace, includeInactive)
+      );
+    } catch (err: any) {
+      setError(err?.message || "Unknown error");
+      setGaConnections([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentWorkspace, includeInactive]);
 
   useEffect(() => {
     let alive = true;
@@ -162,7 +214,7 @@ export function useGAConnections() {
         setLoading(true);
         setError(null);
 
-        const data = await fetchConnections();
+        const data = await fetchConnections(currentWorkspace, includeInactive);
 
         if (!alive) return;
         setGaConnections(data);
@@ -178,13 +230,60 @@ export function useGAConnections() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [currentWorkspace, includeInactive]);
 
   return {
     gaConnections,
     loading,
     error,
+    refresh,
   };
+}
+
+export async function updateGAConnectionForWorkspace(
+  workspace: Workspace,
+  connectionId: number,
+  status: 0 | 1
+) {
+  const legacyUrl = "/api/ga/connections";
+  const workspaceUrl =
+    "/api/workspaces/" + workspace.id + "/integrations/ga";
+  const request = async (url: string) => {
+    const response = await fetch(url, {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Workspace-Id": String(workspace.id),
+      },
+      body: JSON.stringify({ connection_id: connectionId, status }),
+    });
+    const payload = await response.json();
+    return { response, payload };
+  };
+
+  const primary = await request(
+    workspace.source === "backend" ? workspaceUrl : legacyUrl
+  );
+  if (primary.response.ok && primary.payload?.ok) {
+    return primary.payload.data;
+  }
+
+  if (
+    workspace.source === "backend" &&
+    (primary.response.status === 404 || primary.response.status === 502)
+  ) {
+    const fallback = await request(legacyUrl);
+    if (fallback.response.ok && fallback.payload?.ok) {
+      return fallback.payload.data;
+    }
+  }
+
+  throw new Error(
+    primary.payload?.error?.message ||
+      primary.payload?.message ||
+      "無法更新 GA 帳號狀態"
+  );
 }
 
 /** =========================
@@ -198,6 +297,7 @@ export function useGaData({
   ids: number[];
   dateRange: DateRange;
 }) {
+  const { currentWorkspace } = useWorkspace();
   const [gaDailySummary, setGaDailySummary] = useState<GADailySummaryRow[]>([]);
   const [gaPages, setGaPages] = useState<GAPageRow[]>([]);
   const [gaTrafficSources, setGaTrafficSources] = useState<GATrafficSourceRow[]>(
@@ -245,31 +345,36 @@ export function useGaData({
             "daily",
             stableIds,
             dateRange.start,
-            dateRange.end
+            dateRange.end,
+            currentWorkspace.id
           ),
           fetchQuery<GAPageRow>(
             "pages",
             stableIds,
             dateRange.start,
-            dateRange.end
+            dateRange.end,
+            currentWorkspace.id
           ),
           fetchQuery<GATrafficSourceRow>(
             "sources",
             stableIds,
             dateRange.start,
-            dateRange.end
+            dateRange.end,
+            currentWorkspace.id
           ),
           fetchQuery<GAEventRow>(
             "events",
             stableIds,
             dateRange.start,
-            dateRange.end
+            dateRange.end,
+            currentWorkspace.id
           ),
           fetchQuery<GAConversionRow>(
             "conversions",
             stableIds,
             dateRange.start,
-            dateRange.end
+            dateRange.end,
+            currentWorkspace.id
           ),
         ]);
 
@@ -297,7 +402,7 @@ export function useGaData({
     return () => {
       alive = false;
     };
-  }, [stableIds, dateRange.start, dateRange.end]);
+  }, [stableIds, dateRange.start, dateRange.end, currentWorkspace.id]);
 
   return {
     gaDailySummary,
@@ -311,6 +416,7 @@ export function useGaData({
 }
 
 export function useGaReportList() {
+  const { currentWorkspace } = useWorkspace();
   const [reportList, setReportList] = useState<GaReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -322,6 +428,7 @@ export function useGaReportList() {
 
       const res = await fetch("/api/ga/report/list", {
         method: "GET",
+        headers: { "X-Workspace-Id": String(currentWorkspace.id) },
         cache: "no-store",
       });
 
@@ -338,7 +445,7 @@ export function useGaReportList() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentWorkspace.id]);
 
   useEffect(() => {
     fetchList();
@@ -348,6 +455,7 @@ export function useGaReportList() {
 }
 
 export function useGaReportSave() {
+  const { currentWorkspace } = useWorkspace();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -360,6 +468,7 @@ export function useGaReportSave() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-Workspace-Id": String(currentWorkspace.id),
         },
         body: JSON.stringify(payload),
       });
@@ -378,12 +487,13 @@ export function useGaReportSave() {
     } finally {
       setSaving(false);
     }
-  }, []);
+  }, [currentWorkspace.id]);
 
   return { saveReport, saving, error };
 }
 
 export function useGaReportDetail(id: number) {
+  const { currentWorkspace } = useWorkspace();
   const [reportDetail, setReportDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -400,6 +510,7 @@ export function useGaReportDetail(id: number) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "X-Workspace-Id": String(currentWorkspace.id),
           },
           body: JSON.stringify({
             id,
@@ -421,12 +532,13 @@ export function useGaReportDetail(id: number) {
     };
 
     fetchData();
-  }, [id]);
+  }, [id, currentWorkspace.id]);
 
   return { reportDetail, loading, error };
 }
 
 export function useGaReportUpdate() {
+  const { currentWorkspace } = useWorkspace();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -439,6 +551,7 @@ export function useGaReportUpdate() {
         method: "POST", // 或 PUT，都可以，但 POST 最常見
         headers: {
           "Content-Type": "application/json",
+          "X-Workspace-Id": String(currentWorkspace.id),
         },
         body: JSON.stringify({
           id,

@@ -13,7 +13,9 @@ function quotaLimit(session: ServerSession) {
   const subscription = (session.subscription || "").toLowerCase();
 
   if (role === "admin" || subscription.includes("admin")) return 500;
+  if (subscription.includes("business")) return 500;
   if (subscription.includes("pro")) return 100;
+  if (subscription.includes("starter")) return 20;
   if (subscription.includes("basic") || subscription.includes("member")) return 20;
   return 3;
 }

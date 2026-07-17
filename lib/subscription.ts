@@ -5,6 +5,13 @@ export const UPGRADE_URL =
   "https://www.highlight.url.tw/shop/product.html?id=3";
 
 export const productNameMap: Record<string, string> = {
+  starter: "Starter",
+  pro: "Pro",
+  business: "Business",
+  demo: "Demo",
+  "highlightsignal_starter": "Starter",
+  "highlightsignal_pro": "Pro",
+  "highlightsignal_business": "Business",
   "highlightsignal-dashboard": "Dashboard",
   "highlightsignal-ga": "GA 數據分析",
   "highlightsignal-si": "Search Intelligence",
@@ -23,4 +30,53 @@ export function productName(productId: string) {
 
 export function hasProductAccess(enabledProducts: string[], product: "ga" | "si" | "ads") {
   return hasNormalizedProductAccess(enabledProducts, product);
+}
+
+export function normalizeSubscriptionId(subscription: unknown) {
+  return String(subscription || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^highlightsignal[_-]/, "");
+}
+
+export function hasActiveHighlightSignalPlan(subscription: unknown, role?: unknown) {
+  const roleId = normalizeSubscriptionId(role);
+  const planId = normalizeSubscriptionId(subscription);
+
+  if (roleId === "admin" || planId === "admin") return true;
+
+  return ["starter", "pro", "business", "demo"].includes(planId);
+}
+
+export function hasSearchIntelligenceAccess(session: {
+  subscription?: unknown;
+  role?: unknown;
+  enabledProducts?: unknown;
+}) {
+  return (
+    hasActiveHighlightSignalPlan(session.subscription, session.role) ||
+    hasNormalizedProductAccess(session.enabledProducts, "si")
+  );
+}
+
+export function hasGaAccess(session: {
+  subscription?: unknown;
+  role?: unknown;
+  enabledProducts?: unknown;
+}) {
+  return (
+    hasActiveHighlightSignalPlan(session.subscription, session.role) ||
+    hasNormalizedProductAccess(session.enabledProducts, "ga")
+  );
+}
+
+export function hasAdsAccess(session: {
+  subscription?: unknown;
+  role?: unknown;
+  enabledProducts?: unknown;
+}) {
+  return (
+    hasActiveHighlightSignalPlan(session.subscription, session.role) ||
+    hasNormalizedProductAccess(session.enabledProducts, "ads")
+  );
 }

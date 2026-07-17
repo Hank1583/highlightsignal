@@ -2,7 +2,7 @@ export const API_DOMAIN = process.env.API_DOMAIN || "";
 
 export const HIGHLIGHT_PHP_API_BASE_URL = (
   process.env.NEXT_PUBLIC_HIGHLIGHT_PHP_API_BASE_URL ||
-  "https://www.highlight.url.tw/highlightsignal"
+  "https://www.highlight.url.tw/highlightsignal/v2"
 ).replace(/\/+$/, "");
 
 export function highlightPhpApiUrl(path = "") {

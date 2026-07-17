@@ -5,6 +5,7 @@ import type {
   SeoSummaryResponse,
 } from "@/lib/seo/types";
 import { highlightPhpApiUrl } from "@/lib/config";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
 const PHP_API_BASE = highlightPhpApiUrl("si/seo");
 
@@ -37,7 +38,7 @@ async function parseJsonSafe<T>(res: Response): Promise<T> {
 export async function phpListSeoSites(
   userId: number
 ): Promise<SeoListResponse> {
-  const res = await fetch(`${PHP_API_BASE}/list.php`, {
+  const res = await fetchWithTimeout(`${PHP_API_BASE}/list.php`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -81,7 +82,7 @@ export async function phpGetSeoSummary(
   siteId: number,
   options?: { force?: boolean }
 ): Promise<SeoSummaryResponse> {
-  const res = await fetch(`${PHP_API_BASE}/summary.php`, {
+  const res = await fetchWithTimeout(`${PHP_API_BASE}/summary.php`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -91,7 +92,7 @@ export async function phpGetSeoSummary(
       site_id: siteId,
       force: Boolean(options?.force),
     }),
-  });
+  }, 8_000);
 
   const json = await parseJsonSafe<SeoSummaryResponse>(res);
 

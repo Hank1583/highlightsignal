@@ -5,9 +5,8 @@ export default function GeoPage() {
     <SiInsightPage
       module="geo"
       eyebrow="GEO"
-      emptyTitle="GEO 分析"
+      emptyTitle="尚未產生 GEO 分析"
       iconMode="geo"
     />
   );
 }
-

@@ -30,7 +30,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                       href={item.href}
                       onClick={onNavigate}
                       className={[
-                        "flex items-start gap-3 rounded-lg border px-4 py-3 transition",
+                        "flex items-start gap-2.5 rounded-lg border px-3.5 py-2.5 transition",
                         active
                           ? "border-slate-900 bg-slate-900 text-white"
                           : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
@@ -38,15 +38,17 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     >
                       <Icon
                         className={[
-                          "mt-0.5 h-[18px] w-[18px]",
+                          "mt-0.5 h-[18px] w-[18px] shrink-0",
                           active ? "text-white" : "text-slate-500",
                         ].join(" ")}
                       />
                       <span>
-                        <span className="block text-sm font-bold">{item.title}</span>
+                        <span className="block text-sm font-semibold leading-tight">
+                          {item.title}
+                        </span>
                         <span
                           className={[
-                            "mt-1 block text-xs leading-5",
+                            "mt-0.5 block text-xs leading-snug",
                             active ? "text-slate-200" : "text-slate-500",
                           ].join(" ")}
                         >

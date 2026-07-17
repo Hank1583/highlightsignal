@@ -7,7 +7,7 @@ export default function DashboardLayout({
 }) {
   return (
     <section className="min-w-0">
-      <div className="mx-auto max-w-7xl p-6 lg:p-8">{children}</div>
+      <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:px-8 lg:py-6">{children}</div>
     </section>
   );
 }

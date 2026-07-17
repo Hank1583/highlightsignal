@@ -73,6 +73,7 @@ export type SeoSummaryResponse = {
       type: string;
       url: string;
       message: string;
+      recommendation?: string;
     }>;
     suggestions: Array<{
       title: string;
@@ -89,6 +90,22 @@ export type SeoSummaryResponse = {
       gsc: {
         ok: boolean;
         message: string;
+      };
+    };
+    comparison?: {
+      available: boolean;
+      previous_scanned_at: string | null;
+      current_scanned_at: string;
+      health_score: { before: number; after: number; change: number };
+      issues: {
+        before: number;
+        after: number;
+        fixed: number;
+        added: number;
+        remaining: number;
+        fixed_items: Array<{ severity: "HIGH" | "MEDIUM" | "LOW"; type: string; url: string; message: string }>;
+        added_items: Array<{ severity: "HIGH" | "MEDIUM" | "LOW"; type: string; url: string; message: string }>;
+        remaining_items: Array<{ severity: "HIGH" | "MEDIUM" | "LOW"; type: string; url: string; message: string }>;
       };
     };
   };

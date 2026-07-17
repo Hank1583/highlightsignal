@@ -6,7 +6,6 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 type Props = {
-  enabledProducts?: string[];
   user?: {
     name?: string;
     email?: string;
@@ -15,17 +14,18 @@ type Props = {
 };
 
 export default function AppHeader({
-  enabledProducts = ["dashboard"],
   user,
 }: Props) {
   const router = useRouter();
 
   return (
-    <header className="sticky top-0 z-40 h-16 border-b border-slate-200 bg-white/90 backdrop-blur">
-      <div className="flex h-full items-center justify-between px-6 lg:px-8">
-        <div className="flex items-center gap-4">
+    <header className="sticky top-0 z-40 min-h-16 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <div className="flex min-h-16 items-center justify-between gap-2 px-3 py-2 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <button
             onClick={() => router.push("/dashboard")}
+            type="button"
+            aria-label="回到決策中心"
             className="flex items-center gap-3 transition hover:opacity-80"
           >
             <Image
@@ -44,9 +44,9 @@ export default function AppHeader({
             </div>
           </button>
 
-          <div className="h-6 w-px bg-slate-200" />
+          <div className="hidden h-6 w-px bg-slate-200 sm:block" />
 
-          <ProductSelect enabledProducts={enabledProducts} />
+          <ProductSelect />
 
           {user?.isDemo && (
             <span className="hidden rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 sm:inline-flex">

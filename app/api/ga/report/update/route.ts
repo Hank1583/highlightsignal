@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";
 import { updateGaReport } from "@/lib/ga/gaApi";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
 export async function POST(req: Request) {
   const token = (await cookies()).get("token")?.value;
@@ -40,7 +41,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const data = await updateGaReport(user.id, id, body);
+    const workspace = await resolveWorkspaceContext(req, user);
+    const data = await updateGaReport(workspace.legacyOwnerMemberId, id, body);
 
     return Response.json({ ok: true, data });
   } catch (error: any) {

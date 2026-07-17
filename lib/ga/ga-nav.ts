@@ -12,69 +12,69 @@ import {
 
 export const gaNavItems = [
   {
-    group: "GA 數據",
+    group: "網站成效",
     items: [
       {
-        title: "總覽",
-        desc: "核心流量與成效",
+        title: "決策總覽",
+        desc: "摘要、建議與下一步",
         href: "/ga",
         icon: LayoutDashboard,
       },
       {
-        title: "趨勢分析",
-        desc: "每日變化與成長",
+        title: "成效趨勢",
+        desc: "造訪與成果的變化證據",
         href: "/ga/trend",
         icon: LineChart,
       },
       {
-        title: "AI 洞察",
-        desc: "異常與下一步建議",
+        title: "成效建議",
+        desc: "待確認的異常與改善方向",
         href: "/ga/insights",
         icon: Brain,
       },
     ],
   },
   {
-    group: "成效分析",
+    group: "深入證據",
     items: [
       {
-        title: "流量分析",
-        desc: "來源、媒介與活動",
+        title: "訪客來源",
+        desc: "來源、媒介與活動證據",
         href: "/ga/traffic",
         icon: Megaphone,
       },
       {
-        title: "頁面分析",
-        desc: "內容表現與入口頁",
+        title: "內容成效",
+        desc: "內容表現與入口頁證據",
         href: "/ga/pages",
         icon: FileText,
       },
       {
-        title: "轉換分析",
-        desc: "事件、目標與成交",
+        title: "關鍵成果",
+        desc: "事件、目標與成交證據",
         href: "/ga/conversions",
         icon: Target,
       },
       {
-        title: "轉換漏斗",
-        desc: "分析步驟完成率與流失",
+        title: "轉換歷程",
+        desc: "完成步驟與流失位置",
         href: "/ga/funnel",
         icon: ListFilter,
       },
     ],
   },
   {
-    group: "報表設定",
+    group: "報告與資料",
     items: [
       {
         title: "報表",
-        desc: "儲存與編輯報表",
+        desc: "定期輸出與儲存報告",
         href: "/ga/report",
         icon: Mail,
       },
       {
-        title: "帳戶設定",
-        desc: "GA 連線與資料來源",
+        title: "資料來源",
+        desc: "Google Analytics 連線設定",
         href: "/ga/account",
         icon: Settings,
       },

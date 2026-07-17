@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, ExternalLink, Globe, Info, X } from "lucide-react";
+import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 
 type Props = {
   open: boolean;
@@ -73,6 +74,7 @@ export default function AddSeoSiteDialog({
   onClose,
   onSuccess,
 }: Props) {
+  const { currentWorkspace } = useWorkspace();
   const [siteName, setSiteName] = useState("");
   const [siteUrl, setSiteUrl] = useState("");
   const [confirmedPermission, setConfirmedPermission] = useState(false);
@@ -124,6 +126,7 @@ export default function AddSeoSiteDialog({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-Workspace-Id": String(currentWorkspace.id),
         },
         body: JSON.stringify({
           site_name: siteName.trim() || null,

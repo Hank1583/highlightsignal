@@ -33,13 +33,27 @@ function formatUnixTime(value?: number) {
   }).format(new Date(value * 1000));
 }
 
+function isPaidSubscription(subscription?: string) {
+  if (!subscription) return false;
+  return !["free", "member"].includes(subscription.trim().toLowerCase());
+}
+
 function getSubscriptionRecords(session: ServerSession): SubscriptionRecord[] {
-  return session.subscribedApps.map((item) => ({
-    appId: item.app_id,
-    appName: productName(item.app_id),
-    expireAt: item.expire_at,
-    status: isActiveByDate(item.expire_at) ? "active" : "expired",
-  }));
+  if (!isPaidSubscription(session.subscription)) {
+    return [];
+  }
+
+  return [
+    {
+      appId: session.subscription || "free",
+      appName: productName(session.subscription || "free"),
+      expireAt: session.expireDate || "",
+      status:
+        !session.expireDate || isActiveByDate(session.expireDate)
+          ? "active"
+          : "expired",
+    },
+  ];
 }
 
 export default async function AccountPage() {

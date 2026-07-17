@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BarChart3, LayoutDashboard, Megaphone, Search } from "lucide-react";
-import { normalizeEnabledProducts, type ProductKey } from "@/lib/products";
+import { type ProductKey } from "@/lib/products";
 
 const products: {
   key: ProductKey;
@@ -11,29 +11,21 @@ const products: {
   basePath: string;
   icon: typeof LayoutDashboard;
 }[] = [
-  { key: "dashboard", label: "Dashboard", basePath: "/dashboard", icon: LayoutDashboard },
-  { key: "ga", label: "GA 數據分析", basePath: "/ga", icon: BarChart3 },
-  { key: "si", label: "Search Intelligence", basePath: "/si", icon: Search },
-  { key: "ads", label: "ADS 廣告成效", basePath: "/ads", icon: Megaphone },
+  { key: "dashboard", label: "決策中心", basePath: "/dashboard", icon: LayoutDashboard },
+  { key: "ga", label: "網站成效", basePath: "/ga", icon: BarChart3 },
+  { key: "si", label: "搜尋與 AI 成效", basePath: "/si", icon: Search },
+  { key: "ads", label: "廣告成效", basePath: "/ads", icon: Megaphone },
 ];
 
-type Props = {
-  enabledProducts?: string[];
-};
-
-export default function ProductSelect({ enabledProducts = ["dashboard"] }: Props) {
+export default function ProductSelect() {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const normalizedProducts = useMemo(() => {
-    return normalizeEnabledProducts(enabledProducts);
-  }, [enabledProducts]);
-
   const availableProducts = useMemo(() => {
-    return products.filter((product) => normalizedProducts.includes(product.key));
-  }, [normalizedProducts]);
+    return products;
+  }, []);
 
   const current =
     availableProducts.find(
@@ -72,10 +64,13 @@ export default function ProductSelect({ enabledProducts = ["dashboard"] }: Props
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex items-center gap-3 rounded-2xl px-3 py-2 transition hover:bg-slate-100"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={`切換產品，目前為 ${current.label}`}
+        className="flex min-h-11 items-center gap-2 rounded-2xl px-3 py-2.5 transition hover:bg-slate-100 sm:gap-3 sm:px-4"
       >
         <CurrentIcon className="h-5 w-5 text-slate-600" />
-        <span className="text-sm font-semibold text-slate-800">
+        <span className="hidden text-base font-semibold text-slate-800 md:inline">
           {current.label}
         </span>
         <svg
@@ -90,7 +85,7 @@ export default function ProductSelect({ enabledProducts = ["dashboard"] }: Props
       </button>
 
       {open && (
-        <div className="absolute left-0 z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div role="menu" className="absolute left-0 z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
           <div className="p-2">
             {availableProducts.map((product) => {
               const isActive = product.key === current.key;
@@ -99,6 +94,7 @@ export default function ProductSelect({ enabledProducts = ["dashboard"] }: Props
               return (
                 <button
                   type="button"
+                  role="menuitem"
                   key={product.key}
                   onClick={() => {
                     // ADS（/ads）是獨立的 adfusion worker，必須硬導航跨過去；
@@ -112,12 +108,12 @@ export default function ProductSelect({ enabledProducts = ["dashboard"] }: Props
                     setOpen(false);
                   }}
                   className={[
-                    "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition",
+                    "flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition",
                     isActive ? "bg-slate-100" : "hover:bg-slate-100",
                   ].join(" ")}
                 >
                   <Icon className="h-5 w-5 text-slate-500" />
-                  <span className="text-sm font-medium text-slate-800">
+                  <span className="text-base font-medium text-slate-800">
                     {product.label}
                   </span>
                 </button>

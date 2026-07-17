@@ -4,14 +4,25 @@ import { useState, useTransition } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { DEMO_EMAIL } from "@/lib/demo";
+import FullPageLoading from "@/components/layout/FullPageLoading";
 
 export default function LoginPage() {
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [loginPhase, setLoginPhase] = useState<"idle" | "authenticating" | "dashboard">("idle");
+
+  function openDashboard() {
+    setLoginPhase("dashboard");
+    // Give React one frame to paint the loading screen before the full navigation.
+    window.requestAnimationFrame(() => {
+      window.location.replace("/dashboard");
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
       e.preventDefault();
       setError("");
+      setLoginPhase("authenticating");
 
       const formData = new FormData(e.currentTarget);
       formData.append("app_id", "highlightsignal");
@@ -19,6 +30,7 @@ export default function LoginPage() {
       const payload = Object.fromEntries(formData.entries());
 
       startTransition(async () => {
+        try {
         const res = await fetch("/api/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -26,22 +38,29 @@ export default function LoginPage() {
           body: JSON.stringify(payload),
         });
 
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
 
-        if (!data.ok) {
-          setError(data.message);
+        if (!res.ok || !data?.ok) {
+          setError(data?.message || "登入失敗，請稍後再試。");
+          setLoginPhase("idle");
           return;
         }
 
         // Force a fresh request so the dashboard reads the new httpOnly cookie.
-        window.location.replace("/dashboard");
+        openDashboard();
+        } catch {
+          setError("目前無法連線到登入服務，請稍後再試。");
+          setLoginPhase("idle");
+        }
       });
     }
 
   function handleDemoLogin() {
     setError("");
+    setLoginPhase("authenticating");
 
     startTransition(async () => {
+      try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -53,19 +72,35 @@ export default function LoginPage() {
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
 
-      if (!data.ok) {
-        setError(data.message);
+      if (!res.ok || !data?.ok) {
+        setError(data?.message || "Demo 登入失敗，請稍後再試。");
+        setLoginPhase("idle");
         return;
       }
 
-      window.location.replace("/dashboard");
+      openDashboard();
+      } catch {
+        setError("目前無法連線到登入服務，請稍後再試。");
+        setLoginPhase("idle");
+      }
     });
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 px-6">
+    <>
+      {loginPhase !== "idle" && (
+        <FullPageLoading
+          title={loginPhase === "dashboard" ? "登入成功" : "正在驗證帳號"}
+          description={
+            loginPhase === "dashboard"
+              ? "正在為你準備 Dashboard 與最新資料。"
+              : "正在確認登入資訊，請稍候。"
+          }
+        />
+      )}
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 px-6">
       <motion.div
         initial={{ opacity: 0, y: 25 }}
         animate={{ opacity: 1, y: 0 }}
@@ -112,6 +147,8 @@ export default function LoginPage() {
             <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
+              role="alert"
+              aria-live="polite"
               className="text-red-500 text-sm text-center font-medium"
             >
               {error}
@@ -152,6 +189,7 @@ export default function LoginPage() {
           </Link>
         </p>
       </motion.div>
-    </main>
+      </main>
+    </>
   );
 }

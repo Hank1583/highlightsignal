@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { DateRange } from "@/app/(app)/ga/dataSource";
+import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 
 type DashboardAction =
   | {
@@ -88,6 +89,7 @@ export default function AiCommandPanel({
   onDateRangeChange,
 }: Props) {
   const router = useRouter();
+  const { currentWorkspace } = useWorkspace();
   const [question, setQuestion] = useState("");
   const [result, setResult] = useState<AiResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -119,6 +121,7 @@ export default function AiCommandPanel({
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
+          "X-Workspace-Id": String(currentWorkspace.id),
         },
         body: JSON.stringify({
           question: trimmed,

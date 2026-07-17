@@ -1,18 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowUpRight,
   Bot,
   CheckCircle2,
   Clock3,
+  Database,
   FileQuestion,
   Globe2,
   History,
   Lightbulb,
   Radar,
+  RotateCcw,
+  Sparkles,
+  Target,
 } from "lucide-react";
 import type {
   SiHistoryResponse,
@@ -23,6 +27,8 @@ import type {
   SiSummaryResponse,
 } from "@/lib/si/types";
 import { formatAnalysisDate } from "@/lib/formatAnalysisDate";
+import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
+import { workspaceHeaders } from "@/lib/workspaceFetch";
 
 type ModuleConfig = {
   module: SiModule;
@@ -31,28 +37,19 @@ type ModuleConfig = {
   iconMode: "aeo" | "geo";
 };
 
-type CurrentUser = {
-  id: number;
-  isDemo?: boolean;
-};
-
 const DEFAULT_SITE_ID = 1;
 
 async function parseJsonSafe<T>(res: Response): Promise<T> {
   const text = await res.text();
-
-  if (!text) {
-    throw new Error(`API returned empty response. status=${res.status}`);
-  }
-
+  if (!text) throw new Error(`API 回傳空內容。status=${res.status}`);
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw new Error(`API did not return JSON. body=${text}`);
+    throw new Error(`API 未回傳有效 JSON。body=${text}`);
   }
 }
 
-function getErrorMessage(json: SiSummaryResponse, fallback: string) {
+function getErrorMessage(json: SiSummaryResponse | SiHistoryResponse | SiSitesResponse, fallback: string) {
   return json?.error?.message || json?.message || fallback;
 }
 
@@ -61,15 +58,15 @@ function siteLabel(site: SiSite) {
 }
 
 function confidenceLabel(value?: string) {
-  if (value === "high") return "信心：高";
-  if (value === "medium") return "信心：中";
-  if (value === "low") return "信心：低";
+  if (value === "high") return "信心高";
+  if (value === "medium") return "信心中";
+  if (value === "low") return "信心低";
   return value ? `信心：${value}` : "";
 }
 
 function draftModeLabel(value?: string) {
-  if (value === "publishable") return "可發布短答案";
-  if (value === "guidance") return "改寫建議";
+  if (value === "publishable") return "可直接發布";
+  if (value === "guidance") return "方向建議";
   return value || "建議草稿";
 }
 
@@ -77,15 +74,15 @@ function methodologyCopy(module: SiModule) {
   if (module === "aeo") {
     return {
       title: "AEO 分析口徑",
-      desc: "以 SEO summary、頁面結構、FAQ/短答案覆蓋度與可回答性為基準，評估內容被 AI answer engine 摘用的準備度。",
-      cadence: "建議在新增內容、調整 FAQ 或修正技術問題後重新產生分析。",
+      desc: "以 SEO summary、頁面結構、FAQ、短答案覆蓋度與可回答性為基準，評估內容被 AI answer engine 摘用的準備度。",
+      cadence: "建議在完成 SEO 修正、FAQ 更新、內容改寫或新增權威來源後重新產生分析。",
     };
   }
 
   return {
     title: "GEO 分析口徑",
-    desc: "以品牌/主題實體、引用線索、搜尋意圖覆蓋與內容可信度為基準，評估網站在生成式搜尋中的能見度機會。",
-    cadence: "建議在完成 SEO 修正、品牌內容更新或新增權威來源後重新產生分析。",
+    desc: "以品牌提及、權威來源、引用基礎、內容覆蓋與搜尋健康度為基準，評估品牌是否容易被 AI 搜尋看見與引用。",
+    cadence: "建議在完成品牌內容更新、外部引用建設或 SEO 技術修正後重新產生分析。",
   };
 }
 
@@ -104,746 +101,491 @@ function buildScoreBreakdown(module: SiModule, summary: SiSummary) {
   const itemCount = summary.items.length;
   const actionCount = summary.actions.length;
   const sideAverage = summary.sideItems.length
-    ? summary.sideItems.reduce((sum, item) => sum + Number(item.score || 0), 0) /
-      summary.sideItems.length
+    ? summary.sideItems.reduce((sum, item) => sum + Number(item.score || 0), 0) / summary.sideItems.length
     : 58;
   const confidenceAverage = summary.items.length
-    ? summary.items.reduce((sum, item) => sum + confidenceScore(item.confidence), 0) /
-      summary.items.length
+    ? summary.items.reduce((sum, item) => sum + confidenceScore(item.confidence), 0) / summary.items.length
     : 58;
   const hasDrafts = summary.items.some((item) => Boolean(item.draft));
-  const hasBasis =
-    summary.metrics.some((item) => Boolean(item.basis)) ||
-    summary.items.some((item) => Boolean(item.basis));
+  const hasBasis = summary.metrics.some((item) => Boolean(item.basis)) || summary.items.some((item) => Boolean(item.basis));
   const hasTags = summary.items.some((item) => item.tags && item.tags.length > 0);
 
   if (module === "aeo") {
     const items = [
-      {
-        label: "FAQ / 問答覆蓋度",
-        weight: 30,
-        score: clampScore(Math.min(100, itemCount * 18 + (hasTags ? 12 : 0))),
-      },
-      {
-        label: "頁面結構清楚度",
-        weight: 20,
-        score: clampScore(sideAverage),
-      },
-      {
-        label: "短答案可摘用性",
-        weight: 25,
-        score: clampScore(confidenceAverage + (hasDrafts ? 8 : 0)),
-      },
-      {
-        label: "Schema / metadata 完整度",
-        weight: 15,
-        score: clampScore(hasBasis ? 78 : 52),
-      },
-      {
-        label: "技術 SEO 健康度",
-        weight: 10,
-        score: clampScore(actionCount ? 72 : 58),
-      },
+      { label: "FAQ / 短答案覆蓋", weight: 30, score: clampScore(Math.min(100, itemCount * 18 + (hasTags ? 12 : 0))) },
+      { label: "內容證據基礎", weight: 20, score: clampScore(sideAverage) },
+      { label: "答案可採用度", weight: 25, score: clampScore(confidenceAverage + (hasDrafts ? 8 : 0)) },
+      { label: "Schema / metadata", weight: 15, score: clampScore(hasBasis ? 78 : 52) },
+      { label: "技術 SEO 基礎", weight: 10, score: clampScore(actionCount ? 72 : 58) },
     ];
-
     return {
       label: "AEO readiness score",
       items,
-      total: clampScore(
-        items.reduce((sum, item) => sum + item.score * (item.weight / 100), 0)
-      ),
+      total: clampScore(items.reduce((sum, item) => sum + item.score * (item.weight / 100), 0)),
     };
   }
 
   const items = [
-    {
-      label: "品牌 / 主題實體清楚度",
-      weight: 25,
-      score: clampScore(sideAverage),
-    },
-    {
-      label: "內容可信度與引用線索",
-      weight: 25,
-      score: clampScore(hasBasis ? 80 : 55),
-    },
-    {
-      label: "搜尋意圖覆蓋度",
-      weight: 20,
-      score: clampScore(Math.min(100, itemCount * 16 + actionCount * 8)),
-    },
-    {
-      label: "權威頁面與內部連結",
-      weight: 15,
-      score: clampScore(confidenceAverage),
-    },
-    {
-      label: "技術 SEO 健康度",
-      weight: 15,
-      score: clampScore(actionCount ? 74 : 58),
-    },
+    { label: "品牌 / 權威來源基礎", weight: 25, score: clampScore(sideAverage) },
+    { label: "引用證據可用度", weight: 25, score: clampScore(hasBasis ? 80 : 55) },
+    { label: "內容覆蓋度", weight: 20, score: clampScore(Math.min(100, itemCount * 16 + actionCount * 8)) },
+    { label: "答案信心", weight: 15, score: clampScore(confidenceAverage) },
+    { label: "技術 SEO 基礎", weight: 15, score: clampScore(actionCount ? 74 : 58) },
   ];
-
   return {
     label: "GEO visibility score",
     items,
-    total: clampScore(
-      items.reduce((sum, item) => sum + item.score * (item.weight / 100), 0)
-    ),
+    total: clampScore(items.reduce((sum, item) => sum + item.score * (item.weight / 100), 0)),
   };
 }
 
-export default function SiInsightPage({
-  module,
-  eyebrow,
-  emptyTitle,
-  iconMode,
-}: ModuleConfig) {
+export default function SiInsightPage({ module, eyebrow, emptyTitle, iconMode }: ModuleConfig) {
+  const { currentWorkspace } = useWorkspace();
+  const workspaceId = currentWorkspace.id;
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") || "overview";
   const querySiteId = Number(searchParams.get("site_id") || DEFAULT_SITE_ID);
 
-  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [user, setUser] = useState<{ id: number; isDemo?: boolean } | null>(null);
   const [siteId, setSiteId] = useState(querySiteId || DEFAULT_SITE_ID);
   const [sites, setSites] = useState<SiSite[]>([]);
   const [summary, setSummary] = useState<SiSummary | null>(null);
   const [history, setHistory] = useState<SiSummary[]>([]);
   const [loadingSites, setLoadingSites] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [loadingSummary, setLoadingSummary] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [errorText, setErrorText] = useState("");
   const isDemo = Boolean(user?.isDemo);
 
-  useEffect(() => {
-    setSiteId(querySiteId || DEFAULT_SITE_ID);
-  }, [querySiteId]);
+  const moduleName = module === "aeo" ? "AI 回答能力" : "AI 能見度";
+  const moduleDesc =
+    module === "aeo"
+      ? "判斷內容是否能清楚回答客戶問題，並找出下一個改善行動。"
+      : "判斷品牌是否容易被 AI 看見與引用，並找出下一個改善行動。";
+  const moduleIcon = iconMode === "aeo" ? Bot : Globe2;
+  const ModuleIcon = moduleIcon;
 
-  const loadHistory = useCallback(async () => {
-    if (!siteId || sites.length === 0) return;
-
+  const loadSites = useCallback(async () => {
     try {
-      setLoadingHistory(true);
-      const res = await fetch(`/api/si/${module}/history`, {
+      setLoadingSites(true);
+      const response = await fetch("/api/si/sites", {
+        method: "GET",
+        headers: workspaceHeaders(workspaceId),
+        cache: "no-store",
+      });
+      const json = await parseJsonSafe<SiSitesResponse>(response);
+      if (!response.ok || !json.ok) throw new Error(getErrorMessage(json, "讀取站點失敗。"));
+      const nextSites = json.data || [];
+      setSites(nextSites);
+      if (!nextSites.some((site) => site.id === siteId) && nextSites[0]) setSiteId(nextSites[0].id);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : "讀取站點失敗。");
+    } finally {
+      setLoadingSites(false);
+    }
+  }, [siteId, workspaceId]);
+
+  const loadSummary = useCallback(
+    async (nextSiteId: number, nextTab = tab) => {
+      try {
+        setLoadingSummary(true);
+        setErrorText("");
+        const response = await fetch(`/api/si/${module}/summary`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...workspaceHeaders(workspaceId),
+          },
+          body: JSON.stringify({ site_id: nextSiteId, tab: nextTab }),
+          cache: "no-store",
+        });
+        const json = await parseJsonSafe<SiSummaryResponse>(response);
+        if (!response.ok || !json.ok) throw new Error(getErrorMessage(json, `讀取 ${eyebrow} 分析失敗。`));
+        setSummary(json.data || null);
+      } catch (error) {
+        setSummary(null);
+        setErrorText(error instanceof Error ? error.message : `讀取 ${eyebrow} 分析失敗。`);
+      } finally {
+        setLoadingSummary(false);
+      }
+    },
+    [eyebrow, module, tab, workspaceId]
+  );
+
+  const loadHistory = useCallback(
+    async (nextSiteId: number, nextTab = tab) => {
+      try {
+        const response = await fetch(`/api/si/${module}/history`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...workspaceHeaders(workspaceId),
+          },
+          body: JSON.stringify({ site_id: nextSiteId, tab: nextTab, limit: 10 }),
+          cache: "no-store",
+        });
+        const json = await parseJsonSafe<SiHistoryResponse>(response);
+        if (response.ok && json.ok) setHistory(json.data || []);
+      } catch {
+        setHistory([]);
+      }
+    },
+    [module, tab, workspaceId]
+  );
+
+  const generateSummary = useCallback(async () => {
+    if (isDemo) return;
+    try {
+      setGenerating(true);
+      setErrorText("");
+      const response = await fetch(`/api/si/${module}/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...workspaceHeaders(workspaceId),
         },
-        body: JSON.stringify({
-          site_id: siteId,
-          tab,
-        }),
-        cache: "no-store",
+        body: JSON.stringify({ site_id: siteId, tab }),
       });
-      const json = await parseJsonSafe<SiHistoryResponse>(res);
-
-      if (!res.ok || !json.ok || !Array.isArray(json.data)) {
-        throw new Error(json?.error?.message || "歷史分析載入失敗");
-      }
-
-      setHistory(json.data);
-    } catch {
-      setHistory([]);
+      const json = await parseJsonSafe<SiSummaryResponse>(response);
+      if (!response.ok || !json.ok) throw new Error(getErrorMessage(json, `產生 ${eyebrow} 分析失敗。`));
+      setSummary(json.data || null);
+      void loadHistory(siteId, tab);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : `產生 ${eyebrow} 分析失敗。`);
     } finally {
-      setLoadingHistory(false);
+      setGenerating(false);
     }
-  }, [module, siteId, sites.length, tab]);
+  }, [eyebrow, isDemo, loadHistory, module, siteId, tab, workspaceId]);
 
   useEffect(() => {
     let alive = true;
-
     fetch("/api/auth/me", { credentials: "include", cache: "no-store" })
-      .then((r) => r.json())
-      .then((res) => {
-        if (!alive) return;
-        setUser(res?.ok && res?.data?.id ? res.data : null);
+      .then((response) => response.json())
+      .then((result) => {
+        if (alive) setUser(result?.ok && result?.data?.id ? result.data : null);
       })
       .catch(() => {
-        if (!alive) return;
-        setUser(null);
+        if (alive) setUser(null);
       });
-
     return () => {
       alive = false;
     };
   }, []);
 
   useEffect(() => {
-    let alive = true;
-
-    async function loadSites() {
-      try {
-        setLoadingSites(true);
-        const res = await fetch("/api/si/sites", {
-          method: "GET",
-          cache: "no-store",
-        });
-        const json = await parseJsonSafe<SiSitesResponse>(res);
-
-        if (!res.ok || !json.ok || !Array.isArray(json.data)) {
-          throw new Error(json?.error?.message || "讀取網站清單失敗");
-        }
-
-        if (!alive) return;
-
-        setSites(json.data);
-        setSiteId((current) => {
-          if (querySiteId) return querySiteId;
-          if (json.data!.some((site) => site.id === current)) return current;
-          return json.data![0]?.id || DEFAULT_SITE_ID;
-        });
-      } catch (error) {
-        if (!alive) return;
-        setSites([]);
-        setErrorText(error instanceof Error ? error.message : "讀取網站清單失敗");
-      } finally {
-        if (alive) setLoadingSites(false);
-      }
-    }
-
     loadSites();
-
-    return () => {
-      alive = false;
-    };
-  }, [querySiteId]);
-
-  const loadSummary = useCallback(
-    async (options?: { generate?: boolean }) => {
-      if (!siteId || sites.length === 0) return;
-      if (options?.generate && isDemo) return;
-
-      try {
-        if (options?.generate) {
-          setGenerating(true);
-        } else {
-          setLoading(true);
-        }
-        setErrorText("");
-
-        const res = await fetch(
-          `/api/si/${module}/${options?.generate ? "generate" : "summary"}`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              site_id: siteId,
-              tab,
-            }),
-            cache: "no-store",
-          }
-        );
-
-        const json = await parseJsonSafe<SiSummaryResponse>(res);
-
-        if (!res.ok || !json.ok || !json.data) {
-          throw new Error(getErrorMessage(json, "讀取 SI 分析資料失敗"));
-        }
-
-        setSummary(json.data);
-        if (options?.generate) {
-          void loadHistory();
-        }
-      } catch (error) {
-        setSummary(null);
-        setErrorText(error instanceof Error ? error.message : "讀取 SI 分析資料失敗");
-      } finally {
-        setLoading(false);
-        setGenerating(false);
-      }
-    },
-    [isDemo, loadHistory, module, siteId, sites.length, tab]
-  );
+  }, [loadSites]);
 
   useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
+    if (siteId) {
+      void loadSummary(siteId, tab);
+      void loadHistory(siteId, tab);
+    }
+  }, [loadHistory, loadSummary, siteId, tab]);
 
-  useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
-
-  const hasData = Boolean(summary?.title || summary?.metrics.length || summary?.items.length);
-
-  const panelIcon = iconMode === "aeo" ? (
-    <FileQuestion className="h-5 w-5 text-slate-500" />
-  ) : (
-    <Bot className="h-5 w-5 text-slate-500" />
-  );
-
-  const sideIcon = iconMode === "aeo" ? (
-    <Lightbulb className="h-5 w-5 text-amber-500" />
-  ) : (
-    <Radar className="h-5 w-5 text-blue-500" />
-  );
-
-  const defaultTitle = useMemo(() => {
-    if (summary?.title) return summary.title;
-    return emptyTitle;
-  }, [emptyTitle, summary?.title]);
-
-  const methodology = methodologyCopy(module);
-  const scoreBreakdown = useMemo(
-    () => (summary && hasData ? buildScoreBreakdown(module, summary) : null),
-    [hasData, module, summary]
-  );
-  const analyzedAt = formatAnalysisDate(summary?.meta?.analyzed_at);
-  const historyScores = useMemo(
-    () =>
-      history.map((item) => ({
-        summary: item,
-        score: buildScoreBreakdown(module, item).total,
-      })),
-    [history, module]
-  );
-  const latestScore = historyScores[0]?.score;
-  const previousScore = historyScores[1]?.score;
-  const latestDelta =
-    typeof latestScore === "number" && typeof previousScore === "number"
-      ? latestScore - previousScore
-      : null;
+  const scoreBreakdown = summary ? buildScoreBreakdown(module, summary) : null;
+  const topRecommendation =
+    summary?.recommendation ||
+    (module === "aeo"
+      ? "先補齊常見問題、短答案與結構化內容，讓 AI 更容易摘用。"
+      : "先補齊品牌介紹、引用來源與權威證據，提升 AI 搜尋能見度。");
+  const decisionSummary =
+    summary?.title ||
+    (module === "aeo" ? "尚未產生 AI 回答能力分析" : "尚未產生 AI 能見度分析");
+  const tabs = [
+    { key: "overview", label: "總覽", href: `/si/${module}` },
+    { key: "evidence", label: "證據", href: `/si/${module}?tab=evidence` },
+    { key: "actions", label: "行動", href: `/si/${module}?tab=actions` },
+  ];
+  const activeTab = tabs.find((item) => item.key === tab) || tabs[0];
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-blue-100 bg-blue-50 p-5">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)] lg:items-center">
+      <header className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-wider text-blue-700">
-              Methodology
-            </p>
-            <h1 className="mt-1 text-lg font-black text-slate-950">
-              {methodology.title}
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-slate-700">
-              {methodology.desc}
-            </p>
-          </div>
-          <div className="rounded-lg bg-white p-4 text-sm font-semibold leading-6 text-slate-600 ring-1 ring-blue-100">
-            {methodology.cadence}
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)] lg:items-start">
-          <div className="min-w-0">
-            <p className="text-sm font-bold uppercase tracking-wider text-blue-600">
+            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-blue-700">
+              <ModuleIcon className="h-3.5 w-3.5" />
               {eyebrow}
-            </p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-              {defaultTitle}
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
-              {summary?.desc || "選擇網站後可重新產生正式分析資料。"}
-            </p>
-            {summary?.site && (
-              <p className="mt-3 break-words text-xs font-semibold text-slate-400">
-                {summary.site.name || summary.site.url} / {summary.site.url}
-              </p>
-            )}
-            {analyzedAt && (
-              <p className="mt-2 text-xs font-semibold text-slate-500">
-                分析日期：{analyzedAt}（台北時間）
-              </p>
-            )}
+            </div>
+            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950">{moduleName}</h1>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-500">{moduleDesc}</p>
           </div>
 
-          <label className="min-w-0 text-sm font-semibold text-slate-600">
-            分析網站
+          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
             <select
               value={siteId}
-              onChange={(event) => setSiteId(Number(event.target.value) || 1)}
+              onChange={(event) => setSiteId(Number(event.target.value))}
               disabled={loadingSites || sites.length === 0}
-              className="mt-2 h-10 w-full max-w-full truncate rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-slate-900"
+              className="min-h-11 rounded-2xl border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700"
             >
-              {loadingSites ? (
-                <option value="">讀取網站中...</option>
-              ) : sites.length === 0 ? (
-                <option value="">尚未建立網站</option>
-              ) : (
-                sites.map((site) => (
-                  <option key={site.id} value={site.id}>
-                    {siteLabel(site)}
-                  </option>
-                ))
-              )}
+              {sites.length === 0 ? <option value={DEFAULT_SITE_ID}>{emptyTitle}</option> : null}
+              {sites.map((site) => (
+                <option key={site.id} value={site.id}>
+                  {siteLabel(site)}
+                </option>
+              ))}
             </select>
-          </label>
+            <button
+              type="button"
+              onClick={() => void generateSummary()}
+              disabled={generating || isDemo}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50"
+            >
+              <RotateCcw className={`h-4 w-4 ${generating ? "animate-spin" : ""}`} />
+              {generating ? "分析中..." : "重新產生分析"}
+            </button>
+          </div>
         </div>
-      </section>
+      </header>
 
-      {errorText && (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {errorText}
-        </div>
-      )}
+      <nav className="flex flex-wrap gap-2">
+        {tabs.map((item) => (
+          <Link
+            key={item.key}
+            href={item.href}
+            className={`rounded-2xl px-4 py-2 text-sm font-bold ${
+              activeTab.key === item.key ? "bg-blue-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"
+            }`}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
 
-      {loadingSites && (
-        <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
-          讀取網站清單中...
-        </div>
-      )}
+      {errorText ? <Notice tone="error" text={errorText} /> : null}
+      {loadingSummary ? <Notice text={`正在讀取 ${eyebrow} 分析...`} /> : null}
 
-      {!loadingSites && sites.length === 0 && !errorText && (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
-          尚未建立可分析的網站。
-        </div>
-      )}
-
-      {loading && (
-        <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
-          讀取 {eyebrow} 分析資料中...
-        </div>
-      )}
-
-      {!loadingSites && sites.length > 0 && !loading && !errorText && !hasData && (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
-          <div>尚未建立 {eyebrow} 分析資料。</div>
+      {!loadingSummary && !summary ? (
+        <section className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center">
+          <FileQuestion className="mx-auto h-10 w-10 text-slate-300" />
+          <h2 className="mt-4 text-xl font-black text-slate-950">{emptyTitle}</h2>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-7 text-slate-500">
+            尚未找到分析結果。請選擇站點後重新產生分析，系統會整理 AI Summary、Evidence、Recommendation 與 Action。
+          </p>
           <button
             type="button"
-            onClick={() => loadSummary({ generate: true })}
+            onClick={() => void generateSummary()}
             disabled={generating || isDemo}
-            className="mt-4 inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white disabled:opacity-50"
           >
-            {generating ? "產生中..." : "產生分析"}
+            <Sparkles className="h-4 w-4" />
+            產生分析
           </button>
-        </div>
-      )}
+        </section>
+      ) : null}
 
-      {!loadingSites && !loading && !errorText && hasData && summary && (
+      {summary ? (
         <>
-          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <section className="grid gap-4 md:grid-cols-4">
+            <ScoreCard title={scoreBreakdown?.label || "Score"} value={scoreBreakdown?.total ?? "-"} icon={<Radar className="h-5 w-5" />} />
+            <ScoreCard title="證據項目" value={summary.items.length} icon={<Database className="h-5 w-5" />} />
+            <ScoreCard title="建議行動" value={summary.actions.length} icon={<Target className="h-5 w-5" />} />
+            <ScoreCard title="分析狀態" value={summary.meta?.status || "ready"} icon={<CheckCircle2 className="h-5 w-5" />} />
+          </section>
+
+          <section className="rounded-3xl border border-blue-100 bg-blue-50/70 p-6">
+            <div className="flex gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+                <Sparkles className="h-5 w-5" />
+              </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <History className="h-5 w-5 text-slate-500" />
-                  <h3 className="font-bold text-slate-900">歷史分析比較</h3>
-                </div>
-                <p className="mt-1 text-sm text-slate-500">
-                  顯示最近 10 次分析；點選紀錄可查看當時的完整內容。
-                </p>
-              </div>
-              {latestDelta !== null && (
-                <div
-                  className={`rounded-full px-3 py-1.5 text-sm font-black ${
-                    latestDelta > 0
-                      ? "bg-emerald-50 text-emerald-700"
-                      : latestDelta < 0
-                        ? "bg-rose-50 text-rose-700"
-                        : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  較上次 {latestDelta > 0 ? "+" : ""}
-                  {latestDelta}
-                </div>
-              )}
-            </div>
-
-            {loadingHistory ? (
-              <p className="mt-4 text-sm text-slate-500">載入歷史紀錄中...</p>
-            ) : historyScores.length > 0 ? (
-              <div className="mt-4 overflow-x-auto">
-                <div className="flex min-w-max gap-3 pb-1">
-                  {historyScores.map(({ summary: item, score }, index) => {
-                    const active = item.meta?.id === summary.meta?.id;
-                    const previous = historyScores[index + 1]?.score;
-                    const delta =
-                      typeof previous === "number" ? score - previous : null;
-
-                    return (
-                      <button
-                        key={item.meta?.id || `${item.meta?.analyzed_at}-${index}`}
-                        type="button"
-                        onClick={() => setSummary(item)}
-                        className={`w-44 rounded-lg border p-4 text-left transition ${
-                          active
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-slate-200 bg-slate-50 hover:border-slate-300"
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-                          <Clock3 className="h-3.5 w-3.5" />
-                          {formatAnalysisDate(item.meta?.analyzed_at)}
-                        </div>
-                        <div className="mt-3 flex items-end justify-between">
-                          <span className="text-2xl font-black text-slate-950">
-                            {score}
-                          </span>
-                          {delta !== null && (
-                            <span
-                              className={`text-xs font-black ${
-                                delta > 0
-                                  ? "text-emerald-600"
-                                  : delta < 0
-                                    ? "text-rose-600"
-                                    : "text-slate-400"
-                              }`}
-                            >
-                              {delta > 0 ? "+" : ""}
-                              {delta}
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-1 text-xs font-semibold text-slate-400">
-                          {index === 0 ? "最新分析" : "歷史分析"}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-slate-500">
-                目前只有最新資料，重新產生分析後會開始累積比較紀錄。
-              </p>
-            )}
-          </section>
-
-          {scoreBreakdown && (
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-wider text-slate-400">
-                    Score
-                  </p>
-                  <h3 className="mt-1 text-lg font-black text-slate-950">
-                    {scoreBreakdown.label}
-                  </h3>
-                  <p className="mt-3 text-5xl font-black tracking-tight text-slate-950">
-                    {scoreBreakdown.total}
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-slate-500">
-                    MVP heuristic / 100
-                  </p>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  {scoreBreakdown.items.map((item) => (
-                    <div key={item.label} className="rounded-lg bg-slate-50 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-bold text-slate-700">
-                          {item.label}
-                        </p>
-                        <p className="text-sm font-black text-slate-950">
-                          {item.score}
-                        </p>
-                      </div>
-                      <div className="mt-3 h-2 rounded-full bg-white">
-                        <div
-                          className="h-2 rounded-full bg-blue-600"
-                          style={{ width: `${item.score}%` }}
-                        />
-                      </div>
-                      <p className="mt-2 text-xs font-semibold text-slate-400">
-                        Weight {item.weight}%
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
-
-          <section className="grid gap-4 md:grid-cols-3">
-            {summary.metrics.map((item) => (
-              <div
-                key={item.label}
-                className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <p className="text-sm font-semibold text-slate-500">{item.label}</p>
-                <p className="mt-2 text-3xl font-bold text-slate-900">
-                  {item.value}
-                </p>
-                {item.note && (
-                  <p className="mt-2 text-xs font-semibold text-emerald-600">
-                    {item.note}
-                  </p>
-                )}
-                {item.basis && (
-                  <p className="mt-3 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-500">
-                    {item.basis}
-                  </p>
-                )}
-              </div>
-            ))}
-          </section>
-
-          <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                {panelIcon}
-                <h3 className="font-bold text-slate-900">
-                  {summary.panelTitle || "分析項目"}
-                </h3>
-              </div>
-
-              <div className="space-y-3">
-                {summary.items.length === 0 ? (
-                  <EmptyText text="尚無分析項目" />
-                ) : (
-                  summary.items.map((item, index) => (
-                    <div
-                      key={`${item.title}-${index}`}
-                      className="rounded-lg border border-slate-200 bg-slate-50 p-4"
-                    >
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <p className="min-w-0 break-words font-semibold text-slate-900">
-                          {item.title}
-                        </p>
-                        {(item.meta || item.source) && (
-                          <span className="w-fit shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-500 ring-1 ring-slate-200">
-                            {item.meta || item.source}
-                          </span>
-                        )}
-                      </div>
-
-                      {item.status && (
-                        <p className="mt-2 text-sm leading-6 text-slate-500">
-                          {item.status}
-                        </p>
-                      )}
-
-                      {(item.sourceLabel || item.intent || item.confidence || item.placement) && (
-                        <div className="mt-3 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
-                          {item.sourceLabel && (
-                            <InfoPill>{item.sourceLabel}</InfoPill>
-                          )}
-                          {item.intent && <InfoPill>搜尋意圖：{item.intent}</InfoPill>}
-                          {item.confidence && (
-                            <InfoPill>{confidenceLabel(item.confidence)}</InfoPill>
-                          )}
-                          {item.placement && (
-                            <InfoPill wide>{item.placement}</InfoPill>
-                          )}
-                        </div>
-                      )}
-
-                      {item.draft && (
-                        <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
-                          <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-bold text-blue-700">
-                            <span>建議內容</span>
-                            <span className="rounded-full bg-white px-2 py-0.5 text-blue-700 ring-1 ring-blue-100">
-                              {draftModeLabel(item.draftMode)}
-                            </span>
-                          </div>
-                          {item.draft}
-                        </div>
-                      )}
-
-                      {item.basis && (
-                        <p className="mt-3 text-xs leading-5 text-slate-400">
-                          {item.basis}
-                        </p>
-                      )}
-
-                      {item.tags && item.tags.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
-                          {item.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="rounded-full bg-blue-50 px-3 py-1 text-blue-700"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
+                <p className="text-xs font-black uppercase tracking-wide text-blue-700">AI Summary</p>
+                <h2 className="mt-2 text-2xl font-black text-slate-950">{decisionSummary}</h2>
+                <p className="mt-2 text-sm leading-7 text-slate-600">{summary.desc || `${moduleName} 分析已整理為可審查的判斷與證據。`}</p>
               </div>
             </div>
+          </section>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                {sideIcon}
-                <h3 className="font-bold text-slate-900">
-                  {summary.sideTitle || "建議方向"}
-                </h3>
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="grid gap-5 lg:grid-cols-[1fr_260px] lg:items-center">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-violet-700">
+                  <Target className="h-4 w-4" />
+                  Top Recommendation
+                </div>
+                <h2 className="mt-3 text-xl font-black text-slate-950">{topRecommendation}</h2>
+                <p className="mt-2 text-sm leading-7 text-slate-600">
+                  {module === "aeo"
+                    ? "改善後可提高內容被 AI 摘用、直接回答與推薦的機會。"
+                    : "改善後可增加品牌被 AI 搜尋看見、理解與引用的機會。"}
+                </p>
               </div>
-
-              {summary.sideItems.length > 0 && (
-                <div className="mb-5 space-y-4">
-                  {summary.sideItems.map((item) => (
-                    <div key={item.name}>
-                      <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-                        <span className="min-w-0 break-words font-semibold text-slate-700">
-                          {item.name}
-                        </span>
-                        <span className="font-bold text-slate-900">
-                          {Math.round(item.score)}
-                        </span>
-                      </div>
-                      <div className="h-2 rounded-full bg-slate-100">
-                        <div
-                          className="h-2 rounded-full bg-slate-900"
-                          style={{
-                            width: `${Math.max(0, Math.min(100, item.score))}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {summary.actions.length > 0 ? (
-                <div className="space-y-3">
-                  {summary.actions.map((item) => (
-                    <div key={item} className="flex gap-3 text-sm text-slate-600">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                      <span className="min-w-0 break-words">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : summary.recommendation ? (
-                <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
-                  <div className="mb-2 flex items-center gap-2 font-bold text-slate-900">
-                    <Globe2 className="h-4 w-4" />
-                    AI 建議
-                  </div>
-                  <div className="flex gap-2">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                    <span className="min-w-0 break-words">{summary.recommendation}</span>
-                  </div>
-                </div>
-              ) : (
-                <EmptyText text="尚無建議內容" />
-              )}
-
-              <button
-                type="button"
-                onClick={() => loadSummary({ generate: true })}
-                disabled={generating || isDemo}
-                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {generating ? "更新中..." : "重新產生分析"}
+              <Link href={`/si/${module}?tab=actions`} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-black text-white hover:bg-violet-700">
+                查看行動
                 <ArrowUpRight className="h-4 w-4" />
-              </button>
+              </Link>
+            </div>
+          </section>
+
+          {activeTab.key === "overview" ? (
+            <div className="grid gap-6 xl:grid-cols-2">
+              <InfoCard title={scoreBreakdown?.label || "分數拆解"}>
+                {scoreBreakdown ? (
+                  <div className="space-y-3">
+                    {scoreBreakdown.items.map((item) => (
+                      <div key={item.label} className="rounded-2xl bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-bold text-slate-700">{item.label}</span>
+                          <span className="text-sm font-black text-slate-950">{item.score}</span>
+                        </div>
+                        <div className="mt-3 h-2 rounded-full bg-slate-200">
+                          <div className="h-2 rounded-full bg-blue-600" style={{ width: `${item.score}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyText text="尚未產生分數拆解。" />
+                )}
+              </InfoCard>
+
+              <InfoCard title="分析方法">
+                {(() => {
+                  const copy = methodologyCopy(module);
+                  return (
+                    <div className="space-y-3 text-sm leading-7 text-slate-600">
+                      <p className="font-black text-slate-950">{copy.title}</p>
+                      <p>{copy.desc}</p>
+                      <p>{copy.cadence}</p>
+                    </div>
+                  );
+                })()}
+              </InfoCard>
+            </div>
+          ) : null}
+
+          {activeTab.key === "evidence" ? (
+            <div className="grid gap-6 xl:grid-cols-2">
+              <InfoCard title={summary.panelTitle || "證據"}>
+                {summary.items.length === 0 ? (
+                  <EmptyText text="目前沒有證據項目。" />
+                ) : (
+                  <div className="space-y-3">
+                    {summary.items.map((item) => (
+                      <div key={`${item.title}-${item.meta || ""}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-black text-slate-950">{item.title}</h3>
+                          {item.confidence ? <span className="rounded-full bg-blue-100 px-2 py-1 text-[10px] font-black text-blue-700">{confidenceLabel(item.confidence)}</span> : null}
+                        </div>
+                        {item.meta ? <p className="mt-2 text-sm text-slate-500">{item.meta}</p> : null}
+                        {item.basis ? <p className="mt-2 text-sm leading-6 text-slate-600">{item.basis}</p> : null}
+                        {item.draft ? (
+                          <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50 p-3 text-sm leading-6 text-violet-900">
+                            <span className="font-black">{draftModeLabel(item.draftMode)}：</span>
+                            {item.draft}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InfoCard>
+
+              <InfoCard title={summary.sideTitle || "補充指標"}>
+                {summary.sideItems.length === 0 ? (
+                  <EmptyText text="目前沒有補充指標。" />
+                ) : (
+                  <div className="space-y-3">
+                    {summary.sideItems.map((item) => (
+                      <div key={item.name} className="rounded-2xl bg-slate-50 p-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold text-slate-700">{item.name}</span>
+                          <span className="text-sm font-black text-slate-950">{item.score}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InfoCard>
+            </div>
+          ) : null}
+
+          {activeTab.key === "actions" ? (
+            <div className="grid gap-6 xl:grid-cols-2">
+              <InfoCard title="建議行動">
+                {summary.actions.length === 0 ? (
+                  <EmptyText text="目前沒有建議行動。" />
+                ) : (
+                  <div className="space-y-3">
+                    {summary.actions.map((action, index) => (
+                      <div key={action} className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-950 text-xs font-black text-white">{index + 1}</div>
+                        <p className="text-sm leading-6 text-slate-700">{action}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InfoCard>
+
+              <InfoCard title="歷史紀錄">
+                {history.length === 0 ? (
+                  <EmptyText text="尚無歷史分析。" />
+                ) : (
+                  <div className="space-y-3">
+                    {history.map((item, index) => (
+                      <div key={`${item.meta?.id || index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center gap-2 text-xs font-black text-slate-500">
+                          <History className="h-3.5 w-3.5" />
+                          {formatAnalysisDate(item.meta?.analyzed_at || "")}
+                        </div>
+                        <p className="mt-2 text-sm font-bold text-slate-900">{item.title}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InfoCard>
+            </div>
+          ) : null}
+
+          <section className="rounded-3xl border border-amber-200 bg-amber-50/70 p-6">
+            <div className="flex gap-3">
+              <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-amber-700">Business Impact</p>
+                <h2 className="mt-2 text-lg font-black text-slate-950">
+                  {module === "aeo"
+                    ? "回答覆蓋不足會讓高意圖問題的曝光機會流向競品。"
+                    : "引用與權威訊號不足，可能讓競品優先出現在 AI 建議答案中。"}
+                </h2>
+              </div>
             </div>
           </section>
         </>
-      )}
+      ) : null}
     </div>
   );
 }
 
-function InfoPill({
-  children,
-  wide = false,
-}: {
-  children: ReactNode;
-  wide?: boolean;
-}) {
+function Notice({ text, tone = "default" }: { text: string; tone?: "default" | "error" }) {
   return (
-    <div
-      className={`min-w-0 break-words rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200 ${
-        wide ? "md:col-span-2" : ""
-      }`}
-    >
-      {children}
+    <div className={`rounded-3xl border p-6 text-sm font-semibold shadow-sm ${tone === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-white text-slate-500"}`}>
+      {text}
     </div>
+  );
+}
+
+function ScoreCard({ title, value, icon }: { title: string; value: string | number; icon: React.ReactNode }) {
+  return (
+    <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="text-sm font-medium text-slate-500">{title}</div>
+        <div className="text-slate-400">{icon}</div>
+      </div>
+      <div className="text-4xl font-bold tracking-tight text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      <div className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-900">
+        <Lightbulb className="h-5 w-5 text-blue-600" />
+        {title}
+      </div>
+      {children}
+    </section>
   );
 }
 

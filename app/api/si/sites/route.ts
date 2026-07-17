@@ -1,20 +1,12 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { verifyToken } from "@/lib/auth";
+import { getServerSession } from "@/lib/serverSession";
 import { phpListSiSites } from "@/lib/si/siApi";
+import { hasSearchIntelligenceAccess } from "@/lib/subscription";
+import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const token = (await cookies()).get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { ok: false, error: { code: "UNAUTHORIZED", message: "Unauthorized" } },
-        { status: 401 }
-      );
-    }
-
-    const user = await verifyToken(token);
+    const user = await getServerSession(req);
 
     if (!user?.id) {
       return NextResponse.json(
@@ -23,7 +15,21 @@ export async function GET() {
       );
     }
 
-    const data = await phpListSiSites(Number(user.id));
+    if (!hasSearchIntelligenceAccess(user)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "FORBIDDEN",
+            message: "Search Intelligence is not enabled for this account.",
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    const workspace = await resolveWorkspaceContext(req, user);
+    const data = await phpListSiSites(workspace.legacyOwnerMemberId);
     return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(
