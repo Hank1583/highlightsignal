@@ -45,7 +45,7 @@ DEFERRED    已決定延後，不計入目前版本
 | Active milestone | V0.8 — Release Safety |
 | Active task | `V08-02` BLOCKED_EXTERNAL_ROTATION |
 | Next task | 取得 production credential rotation 與 staging secret cutover 明確授權 |
-| Blocking issue | Legacy PHP mirror 含已曝露的 DB、OpenAI、Google API/OAuth、service-account 與 report credential；Cloudflare 缺 `PHP_SERVICE_AUTH_SECRET`；尚未完成 staging signed smoke test |
+| Blocking issue | Legacy PHP mirror 含已曝露的 DB、OpenAI、Google API/OAuth、service-account 與 report credential；Cloudflare 缺 `PHP_SERVICE_AUTH_SECRET`；尚未完成 staging signed smoke test；智邦 runtime 固定 PHP 7.0／MySQL 5.6 |
 | Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：

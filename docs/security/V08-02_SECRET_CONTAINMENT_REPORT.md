@@ -30,6 +30,33 @@ Cloudflare's read-only secret-name inventory returned `INTERNAL_KEY`,
 
 ## Exposure findings
 
+### 智邦 hosting constraint and live HTTP evidence
+
+The owner confirmed that the current 智邦 environment is fixed at PHP 7.0 and
+MySQL 5.6 and cannot be switched to PHP 8.1/8.2 or a newer MySQL release. This
+is accepted as the current compatibility target, not as resolution of the
+runtime end-of-life risk.
+
+On 2026-07-17, a live status-only check discarded all response bodies and
+returned:
+
+| Path class | HTTP status | Interpretation |
+|---|---:|---|
+| `/highlightsignal/v2/api/v1/health` | 200 | PHP front controller/router responds |
+| `/highlightsignal/v2/db_connect.php` | 403 | Direct HTTP access denied |
+| `/highlightsignal/v2/.env` | 403 | Direct HTTP access denied |
+| `/highlightsignal/v2/si/seo/business-agent-*.json` | 403 | Credential-like path denied |
+| `/highlightsignal/v2/ga/report/config.php` | 404 | Not publicly present at the checked path |
+
+The 403 results verify defense-in-depth at the HTTP layer. They do not make a
+hardcoded credential safe against FTP access, hosting-account compromise,
+backup exposure, or accidental payload copying. The repository's sanitized
+`db_connect.php` and private environment layout remain required.
+
+The health endpoint intentionally bypasses database creation and service HMAC
+authentication, so HTTP 200 does not count as DB, auth, or signed API smoke-test
+evidence.
+
 ### Repository and Git history
 
 - `.env.local`, PHP `.env`, private credential JSON, report `config.php`, PEM,
@@ -126,6 +153,11 @@ provider/host access:
 
 Until required rotations and the staging signed smoke test are complete, this
 task must remain `BLOCKED_EXTERNAL_ROTATION` and may not be marked `DONE`.
+
+Because the host runtime is fixed, V08-05 must execute PHP 7.0-compatible lint
+and MySQL 5.6-compatible validation on the 智邦 target or an equivalent runtime.
+PHP 8.1+ remains a future hosting-migration requirement rather than an in-place
+switch.
 
 ## Local verification
 
