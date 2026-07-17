@@ -93,9 +93,17 @@ final class ServiceRequestAuthenticator
         $statement = $this->database->prepare(
             'INSERT INTO service_request_nonces (nonce, requested_at, expires_at) VALUES (?, FROM_UNIXTIME(?), FROM_UNIXTIME(?))'
         );
+        if ($statement === false) {
+            throw new \RuntimeException('Unable to prepare service nonce claim.');
+        }
         $expiresAt = $timestamp + Environment::integer('SERVICE_AUTH_TTL_SECONDS', 60);
         $statement->bind_param('sii', $nonce, $timestamp, $expiresAt);
-        $statement->execute();
+        if (!$statement->execute()) {
+            if ((int) $statement->errno === 1062) {
+                throw new AuthenticationException('Duplicate signed request.');
+            }
+            throw new \RuntimeException('Unable to claim service nonce.');
+        }
 
         $cleanupPercent = Environment::integer('SERVICE_AUTH_NONCE_CLEANUP_PERCENT', 1);
         if ($cleanupPercent > 0 && mt_rand(1, 100) <= min(100, $cleanupPercent)) {
