@@ -1,6 +1,6 @@
 # Task Packet — V08-05 PHP Staging Validation
 
-Status: VERIFY_PENDING_AUTH_HOTFIX_UPLOAD
+Status: VERIFY_PENDING_NONCE_HOTFIX_UPLOAD
 Milestone: V0.8 Release Safety  
 Dependencies: `V08-01`–`V08-04`  
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`

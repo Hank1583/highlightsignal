@@ -1,6 +1,6 @@
 # V08-03 Endpoint Authentication Matrix
 
-Status: VERIFY_PENDING_AUTH_HOTFIX_UPLOAD
+Status: VERIFY_PENDING_NONCE_HOTFIX_UPLOAD
 Date: 2026-07-17
 Target: 智邦 `/highlightsignal/v2` (pre-launch integration)
 

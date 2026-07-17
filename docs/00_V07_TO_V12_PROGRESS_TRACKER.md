@@ -43,9 +43,9 @@ DEFERRED    已決定延後，不計入目前版本
 |---|---|
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
-| Active task | `V08-03`／`V08-05` VERIFY_PENDING_AUTH_HOTFIX_UPLOAD；`V08-06` 等待首次 hosted CI |
-| Next task | 上傳 `538ab3e` 的兩個 PHP hotfix，重測 replay/OAuth state，再決定是否 push/deploy |
-| Blocking issue | post-upload 驗證發現的 legacy cache replay 與 OAuth state ordering 修正尚未上傳；payload-wide PHP lint 依 owner 決策不執行；V08-06 hosted CI 需 push 後才有證據 |
+| Active task | `V08-03`／`V08-05` VERIFY_PENDING_NONCE_HOTFIX_UPLOAD；`V08-06` 等待首次 hosted CI |
+| Next task | 上傳 nonce claim hotfix、修正 OAuth `/v2` redirect，重測後再決定是否 push/deploy |
+| Blocking issue | legacy MySQLi non-strict connection 的 duplicate nonce 回傳值需新版 authenticator 明確拒絕；OAuth env 仍指向 pre-v2 callback；payload-wide PHP lint 依 owner 決策不執行 |
 | Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：
@@ -169,6 +169,7 @@ V0.8 Release Safety
   - 驗收：偽造 identity header、錯誤簽章、過期簽章全部被拒絕。
   - 本機 implementation commit：`ad6f46d`；等待單次上傳智邦後執行 legacy endpoint URL 驗證。
   - 第一輪 upload 驗證通過主要 signed/negative flows；cache replay 與 OAuth state ordering hotfix 為 `538ab3e`，等待兩檔重傳驗證。
+  - `538ab3e` 上傳後確認 cache header 與 OAuth state PASS；legacy replay 根因為 non-strict MySQLi 未檢查 duplicate INSERT false，已補 authenticator hotfix。
 
 - [x] `V08-04` 建立 staging／production Cloudflare 設定
   - Wrangler 定義 staging 與 production environment。
