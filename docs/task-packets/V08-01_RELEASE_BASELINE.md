@@ -1,6 +1,6 @@
 # Task Packet — V08-01 Release Baseline
 
-Status: READY  
+Status: DONE  
 Milestone: V0.8 Release Safety  
 Prepared: 2026-07-17  
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`

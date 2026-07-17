@@ -35,7 +35,7 @@ DEFERRED    已決定延後，不計入目前版本
 
 目前版本：**V0.7 Beta**  
 估計 V1.2 規格完成度：**50–60%**  
-目前發布狀態：現有官網已可存取；最新工作樹尚未形成可追溯的正式 Release。
+目前發布狀態：V08-01 已建立可追溯 Release baseline；production 未因本任務變更。
 
 ## Current execution board
 
@@ -43,10 +43,10 @@ DEFERRED    已決定延後，不計入目前版本
 |---|---|
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
-| Active task | `V08-01` READY FOR EXTERNAL EXECUTION |
-| Next task | `V08-01` 整理工作樹與建立 Release baseline |
-| Blocking issue | `BLOCKED_EXTERNAL_EXECUTION`：尚未收到 V08-01 commit／diff／驗證回報 |
-| Last verified commit | `399fd51`（僅作 Git 基準，不代表產品版本） |
+| Active task | `V08-02` READY — Secret containment |
+| Next task | `V08-02` 秘密圍堵、移轉與必要輪替 |
+| Blocking issue | V08-01 已解除；兩個 credential-bearing legacy PHP files 已保留但排除 Release，交由 V08-02 處理 |
+| Last verified commit | `d5a2a1a`（V08-01 code/config baseline；完整證據見 release report） |
 
 已備妥的獨立執行任務包：
 
@@ -62,17 +62,18 @@ DEFERRED    已決定延後，不計入目前版本
 
 版本進度只在 Task 通過驗收後更新；未提交或未驗證的程式碼不自動計入完成度。
 
-## Current blocker record
+## Resolved blocker record
 
 ```text
 Blocker ID: BLOCKED_EXTERNAL_EXECUTION
 Since: 2026-07-17
+Resolved: 2026-07-17 by V08-01
 Affected gate: V0.8 Release Safety
-Required change to resume: 執行 V08-01，並回傳變更分類、驗證結果與 commit／未提交 diff 證據
-Prepared handoff: docs/task-packets/V08-01_RELEASE_BASELINE.md
+Resolution evidence: docs/releases/V08-01_RELEASE_BASELINE_REPORT.md
+Baseline commits: 735dad5, 9391dcc, 38c7acd, d5a2a1a
 ```
 
-此 blocker 不代表技術上無法完成；它表示主追蹤對話依約不代替執行對話修改產品程式，且目前沒有新的實作證據可供驗收。
+此 blocker 曾表示缺少外部執行證據；V08-01 已以 commit grouping、驗證紀錄與明確排除清單解除。
 
 2026-07-17 已驗證：
 
@@ -81,10 +82,10 @@ Prepared handoff: docs/task-packets/V08-01_RELEASE_BASELINE.md
 * `npm run build`：PASS
 * `npm run build:cf`：PASS
 * `npx wrangler deploy --dry-run`：PASS
-* 官網、登入、註冊、PHP health endpoint：HTTP 200
+* 官網、登入、註冊、PHP health endpoint：先前基準為 HTTP 200；V08-01 未部署，未對最新 baseline 執行線上 smoke test
 * 自動化測試檔案：0
 * 本機 PHP runtime：未安裝，PHP lint 尚未驗證
-* 工作樹：大量 modified／untracked 內容，尚未整理成 Release baseline
+* 工作樹：已整理為四個 code/config baseline commits；僅剩兩個含 legacy credential 的 PHP files 明確排除並交由 V08-02
 
 ---
 
@@ -117,11 +118,12 @@ V0.8 Release Safety
 
 ## 工作清單
 
-- [ ] `V08-01` 整理工作樹與建立 Release baseline
+- [x] `V08-01` 整理工作樹與建立 Release baseline
   - 確認 modified、deleted、untracked 檔案歸屬。
   - 解決 README 所述外部 PHP source of truth 與目前 `backend/` 目錄的矛盾。
   - 建立可重現的 baseline commit／tag。
   - 驗收：乾淨工作樹或有明確列管的未提交檔案。
+  - 證據：`docs/releases/V08-01_RELEASE_BASELINE_REPORT.md`；僅保留兩個已列管且未納入 Release 的 legacy OAuth PHP files。
 
 - [ ] `V08-02` Secret containment 與正式環境設定
   - 輪替資料庫、OpenAI、Google/API 等可能曝露的憑證。
