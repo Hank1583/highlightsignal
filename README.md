@@ -13,7 +13,9 @@ Open `http://localhost:3000`.
 
 ## Required Environment
 
-Copy `.env.example` to `.env.local` for local development.
+Copy `.env.example` to `backend/private/frontend.env` for local development.
+`npm run dev` loads that ignored file explicitly. Do not use Next.js `.env*`
+files for secrets: OpenNext can collect them into the Worker bundle.
 
 - `JWT_SECRET`: Required in production. Use a long random value.
 - `NEXT_PUBLIC_BASE_URL`: Public frontend URL.
@@ -30,6 +32,9 @@ Before release:
 - Run `npm run build`.
 - Run `npm run build:cf` for the Cloudflare Worker bundle.
 - Confirm production has `JWT_SECRET`.
+- Confirm Cloudflare runtime secrets include `JWT_SECRET` and
+  `PHP_SERVICE_AUTH_SECRET`; never provide either as `NEXT_PUBLIC_*` or as a
+  build-time `.env.local` value.
 - Confirm login sets the `token` cookie with `HttpOnly`, `Secure`, `SameSite=Lax`, and `Path=/`.
 - Confirm `/api/auth/logout` clears the `token` cookie.
 - Confirm protected routes redirect anonymous users to `/auth/login`.

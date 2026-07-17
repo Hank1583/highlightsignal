@@ -22,6 +22,11 @@ if (is_file($vendorAutoload)) {
     });
 }
 
-HighlightSignal\Config\Environment::load($backendRoot . '/.env');
+$environmentFile = getenv('HIGHLIGHT_SIGNAL_ENV_FILE');
+if ($environmentFile === false || trim($environmentFile) === '') {
+    $environmentFile = dirname($backendRoot) . '/private/.env';
+}
+
+HighlightSignal\Config\Environment::load($environmentFile);
 
 date_default_timezone_set('UTC');

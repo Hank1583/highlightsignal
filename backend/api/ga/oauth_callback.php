@@ -1,0 +1,147 @@
+<?php
+require_once __DIR__ . '/../db_connect.php'; // 資料庫連線
+
+$client_id = (string) getenv("GOOGLE_CLIENT_ID");
+$client_secret = (string) getenv("GOOGLE_CLIENT_SECRET");
+$redirect_uri = (string) getenv("GOOGLE_OAUTH_REDIRECT_URI");
+
+if ($client_id === '' || $client_secret === '' || $redirect_uri === '') {
+    http_response_code(500);
+    die('Google OAuth configuration is incomplete');
+}
+
+// Step 1: Google 回傳的 code
+if (!isset($_GET["code"])) {
+    die("Missing code");
+}
+
+$code = $_GET["code"];
+$state = json_decode(base64_decode($_GET["state"] ?? ""), true);
+$member_id = isset($state["member_id"]) ? intval($state["member_id"]) : 0;
+
+if ($member_id <= 0) {
+    die("Missing member_id");
+}
+
+// Step 2: 用 code 換 access_token + refresh_token
+$tokenData = file_get_contents("https://oauth2.googleapis.com/token", false, stream_context_create([
+    "http" => [
+        "method" => "POST",
+        "header" => "Content-Type: application/x-www-form-urlencoded",
+        "content" => http_build_query([
+            "code" => $code,
+            "client_id" => $client_id,
+            "client_secret" => $client_secret,
+            "redirect_uri" => $redirect_uri,
+            "grant_type" => "authorization_code"
+        ])
+    ]
+]));
+
+$tokens = json_decode($tokenData, true);
+
+$access_token = $tokens["access_token"];
+$refresh_token = $tokens["refresh_token"]; // 之後排程抓 GA 必用！
+
+
+// =============== Helper ===================
+function callGA($url, $access_token)
+{
+    $ch = curl_init();
+
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Authorization: Bearer $access_token",
+        "Accept: application/json"
+    ]);
+
+    $response = curl_exec($ch);
+
+    if (curl_errno($ch)) {
+        echo "CURL ERROR: " . curl_error($ch);
+        return null;
+    }
+
+    curl_close($ch);
+
+    return json_decode($response, true);
+}
+
+
+// ==============================================
+// Step 3：取得帳戶列表（accounts）
+// ==============================================
+
+$accounts = callGA("https://analyticsadmin.googleapis.com/v1beta/accounts", $access_token);
+
+// 找到正確 account ＝ Highlight (237829758)
+$realAccountId = null;
+foreach ($accounts["accounts"] as $acc) {
+    if ($acc["name"] === "accounts/237829758") {
+        $realAccountId = "237829758";
+        break;
+    }
+}
+
+if (!$realAccountId) {
+    die("Cannot find correct GA account");
+}
+
+
+// ==============================================
+// Step 4：取得 Properties（GA4 資源）
+// ==============================================
+
+$properties = callGA(
+    "https://analyticsadmin.googleapis.com/v1beta/properties?filter=parent:accounts/$realAccountId",
+    $access_token
+);
+
+if (!isset($properties["properties"])) {
+    die("No GA properties found");
+}
+
+
+// ==============================================
+// Step 5：處理每個 Property（通常只有一個）
+// ==============================================
+
+foreach ($properties["properties"] as $prop) {
+
+    $property_id = str_replace("properties/", "", $prop["name"]);
+    $property_name = $prop["displayName"];
+
+    // 抓 Data Streams ＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝
+    $streams = callGA(
+        "https://analyticsadmin.googleapis.com/v1beta/properties/$property_id/dataStreams",
+        $access_token
+    );
+
+    $stream_list = json_encode($streams["dataStreams"] ?? []);
+
+    // 假設你有 member_id（登入使用者）
+    // 寫進 DB
+    $stmt = $conn->prepare("
+        INSERT INTO ga_connections 
+        (member_id, property_id, account_name, refresh_token, streams_json, status)
+        VALUES (?, ?, ?, ?, ?, 1)
+        ON DUPLICATE KEY UPDATE 
+            refresh_token = VALUES(refresh_token),
+            streams_json = VALUES(streams_json)
+    ");
+
+    $stmt->bind_param("issss", $member_id, $property_id, $property_name, $refresh_token, $stream_list);
+    $stmt->execute();
+}
+
+
+// ==============================================
+// Step 6：導回成功頁
+// ==============================================
+
+header("Location: https://highlightsignal.com/ga?connected=1");
+exit;
+
+?>

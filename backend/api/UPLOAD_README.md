@@ -6,7 +6,9 @@ as an additional nested level.
 
 Before testing:
 
-1. Copy `.env.example` to `.env` on the server and fill the production values.
+1. Do not upload a populated `.env` or credential JSON with this payload. Set
+   secrets in the host environment, or place the populated environment file
+   outside the web root and set `HIGHLIGHT_SIGNAL_ENV_FILE` to its absolute path.
 2. Set Next.js `PHP_SERVICE_AUTH_SECRET` to the same value as PHP
    `SERVICE_AUTH_SECRET`.
 3. Keep Google service-account JSON outside this web-accessible directory and
@@ -18,3 +20,7 @@ Before testing:
 
 Do not upload `ga_runner.php`; it is a legacy fake-data utility and is not part
 of this payload.
+
+Before upload, verify that the payload contains no `.env`, private key,
+credential JSON, `ga/report/config.php`, `vendor/`, storage, or generated build
+directory.
