@@ -33,6 +33,13 @@ allowed. Do not push or merge to `main`: the external Cloudflare Git integration
 uses `main` as an automatic deployment trigger. Roadmap work remains on
 `codex/*` branches until the V1.2 production gate is approved.
 
+Incident record: before this branch policy was clarified, two main pushes on
+2026-07-17 auto-deployed the default `highlightsignal` Worker at approximately
+09:04Z and 09:07Z. Public home/login/register smoke checks passed and the
+protected dashboard redirected to login. No rollback was performed without
+owner approval. These were separate from the successful staging/production
+named-environment dry-runs.
+
 1. Build and pass the release gate without production credentials.
 2. Provision the four secret names separately for the target named environment.
 3. Run the named environment dry-run and inspect the Worker name, service binding, and asset manifest.
