@@ -43,9 +43,9 @@ DEFERRED    已決定延後，不計入目前版本
 |---|---|
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
-| Active task | `V08-04`～`V08-06` VERIFY；本機 hardening 已實作 |
-| Next task | 核准 Wrangler named-environment dry-run；單次上傳 PHP 並執行 legacy signed/negative URL tests |
-| Blocking issue | Cloudflare dry-run 因可能傳送 bundle 等待明確核准；V08-03 legacy auth 尚未上傳智邦；V08-05 payload-wide PHP lint 依 owner 決策不執行 |
+| Active task | `V08-03`／`V08-05` VERIFY_PENDING_TARGET_UPLOAD；`V08-06` 等待首次 hosted CI |
+| Next task | 單次上傳 PHP overlay，執行 legacy signed/negative URL tests，再決定是否 push/deploy |
+| Blocking issue | V08-03 legacy auth 尚未上傳智邦；V08-05 payload-wide PHP lint 依 owner 決策不執行；V08-06 hosted CI 需 push 後才有證據 |
 | Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：
@@ -169,12 +169,12 @@ V0.8 Release Safety
   - 驗收：偽造 identity header、錯誤簽章、過期簽章全部被拒絕。
   - 本機 implementation commit：`ad6f46d`；等待單次上傳智邦後執行 legacy endpoint URL 驗證。
 
-- [ ] `V08-04` 建立 staging／production Cloudflare 設定
+- [x] `V08-04` 建立 staging／production Cloudflare 設定
   - Wrangler 定義 staging 與 production environment。
   - 分離網址、API base、secret、Worker name 與觀測設定。
   - 處理 `middleware` → `proxy` deprecation。
   - 驗收：兩個環境均能 dry-run，設定不互相污染。
-  - 本機環境隔離、self binding、secret names、observability、startup 與 OpenNext build 已完成；named-environment dry-run 等待外部 bundle-transfer 核准。因 OpenNext 尚不支援 Node Proxy，暫時保留可部署的 Edge middleware。
+  - 本機環境隔離、self binding、secret names、observability、startup 與 OpenNext build 已完成；staging／production named-environment dry-run 均 PASS。因 OpenNext 尚不支援 Node Proxy，暫時保留可部署的 Edge middleware。
 
 - [ ] `V08-05` PHP staging 驗證
   - 在實際 PHP runtime 執行所有 PHP syntax lint。

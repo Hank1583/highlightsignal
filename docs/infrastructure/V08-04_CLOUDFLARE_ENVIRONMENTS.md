@@ -1,6 +1,6 @@
 # V08-04 Cloudflare environment baseline
 
-Status: IMPLEMENTED_LOCAL_DRY_RUN_APPROVAL_PENDING
+Status: DONE
 Date: 2026-07-17
 
 ## Environment matrix
@@ -32,4 +32,13 @@ Next.js 16.2.7 deprecates `middleware.ts` in favor of `proxy.ts`, but Proxy alwa
 5. Verify login, logout, protected-route redirect, and a signed BFF request.
 6. Roll back by redeploying the previously recorded Worker version for the same named environment. Never redirect staging bindings to production as a rollback shortcut.
 
-No Cloudflare environment was deployed by V08-04. Local startup analysis passed. Both required deploy dry-runs remain pending because execution approval classified even `--dry-run` as a possible external bundle transfer.
+No Cloudflare environment was deployed by V08-04. Local startup analysis passed.
+
+## Dry-run evidence
+
+On 2026-07-17, after explicit owner approval, both named environment commands passed:
+
+- `npx wrangler deploy --env staging --dry-run`: PASS; 200 assets; self binding `highlightsignal-staging`; environment `staging`; API host `https://staging.invalid`; exited at the dry-run boundary.
+- `npx wrangler deploy --env production --dry-run`: PASS; 200 assets; self binding `highlightsignal-production`; environment `production`; production API host selected; exited at the dry-run boundary.
+
+The bundle size reported by each environment was 8057.28 KiB raw and 1649.63 KiB gzip. No route, Worker version, secret, or production service was changed.

@@ -24,3 +24,7 @@ Each command propagates a non-zero exit code; there is no `continue-on-error`. E
 ## Accepted gaps
 
 PHP syntax lint is intentionally absent because the owner requires URL-only verification against the fixed PHP 7.0 host. Automated application tests remain a V12-02 gap. `npm ci` reported 15 dependency audit findings (1 low, 7 moderate, 7 high); they require a separate dependency review and were not auto-fixed because forced upgrades may be breaking. The first hosted CI run cannot exist until this commit is pushed, and no push is performed in this task.
+
+## Local execution evidence
+
+The full Node/OpenNext gate, Worker binding type check, startup analysis, Release boundary self-test, and both named-environment Wrangler deploy dry-runs passed on 2026-07-17. Both Wrangler commands stopped at the explicit dry-run boundary; no Worker was deployed. V08-06 remains pending only for the first hosted GitHub Actions run and the owner-accepted PHP lint omission.
