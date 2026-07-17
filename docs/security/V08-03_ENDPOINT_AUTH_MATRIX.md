@@ -1,6 +1,6 @@
 # V08-03 Endpoint Authentication Matrix
 
-Status: VERIFY_PENDING_NONCE_HOTFIX_UPLOAD
+Status: VERIFY_PENDING_REPORT_MAILER_UPLOAD
 Date: 2026-07-17
 Target: 智邦 `/highlightsignal/v2` (pre-launch integration)
 
@@ -109,8 +109,8 @@ unsigned and tampered request rejection, Workspace isolation, and workflow
 mutation/readback. It found a cache-mediated legacy replay gap and OAuth state
 validation ordering gap; both are fixed locally in `538ab3e`.
 
-Pending after uploading the two-file hotfix:
+Nonce and OAuth hotfix verification is complete. Pending final upload:
 
-- legacy nonce replay rejection with `no-store` response headers;
-- OAuth invalid/expired state tests without provider exchange;
-- report and sync BFF smoke tests where provider data is available.
+- upload `ad38e96` report mailer direct-request detection;
+- prove unsigned report request is rejected before mail generation;
+- positive report delivery remains intentionally excluded to avoid external email side effects.

@@ -1,6 +1,6 @@
 # V08-05 PHP target validation
 
-Status: VERIFY_PENDING_AUTH_HOTFIX_UPLOAD
+Status: VERIFY_PENDING_REPORT_MAILER_UPLOAD
 Date: 2026-07-17
 Target: 智邦 `/highlightsignal/v2` with PHP 7.0 and MySQL 5.6
 
@@ -55,3 +55,7 @@ Two gaps were found and fixed locally in commit `538ab3e`:
 The owner uploaded `legacy_auth.php` and `ga/oauth_callback.php` from `538ab3e` and provisioned the previous OAuth values. Invalid and expired OAuth state now return 400. The OAuth start endpoint returns 302, but its redirect does not match the current `/v2/ga/oauth_callback.php` target because the legacy environment value points to the pre-v2 path. Update only `GOOGLE_OAUTH_REDIRECT_URI` to the exact current HTTPS callback and register the same URI on the Google OAuth Web client. The old client secret remains classified as potentially exposed.
 
 The two-file retest proved `no-store` and OAuth invalid/expired state handling, but legacy replay still returned 200. The cause was a connection-mode difference: the front controller enables MySQLi strict exceptions, while the legacy connection can return `false` for a duplicate nonce INSERT. The authenticator did not check that return value. It now rejects duplicate or failed nonce claims independently of MySQLi reporting mode. The reusable redacted test is `scripts/verify-php-hotfix.ps1`.
+
+After uploading the authenticator hotfix and correcting the `/v2` OAuth redirect, the reusable test passed all seven checks: first legacy read 200, `no-store` present, same nonce with a different query 401, exact replay 401, invalid OAuth state 400, expired OAuth state 400, and OAuth start redirect 302 with the exact current callback.
+
+Final endpoint-family negative checks returned 401 for sync and OAuth start. Direct report mailer returned an empty 200 because 智邦 resolves `SCRIPT_FILENAME` through a path that did not equal the file's `realpath()`, so the script incorrectly treated the request as an include. No email path executed. Commit `ad38e96` makes every non-CLI invocation enter signed authentication while preserving CLI include/direct behavior. Upload `ga/report/report_mailer.php` and verify an unsigned request returns 401; do not perform a positive mail send during this security gate.
