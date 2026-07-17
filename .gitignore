@@ -55,6 +55,7 @@ demo-cookie.txt
 # vercel
 .vercel
 .wrangler
+worker-startup.cpuprofile
 
 # typescript
 *.tsbuildinfo

@@ -1,22 +1,61 @@
 {
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "highlightsignal",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  // 登入時 fetchBackendToken 要打 Java 後端（換 AdFusion 的 backendToken）。
-  // 用「執行時」變數 API_HOST（非 NEXT_PUBLIC_，後者在 GitHub CI build 時無 .env.local
-  // 會被內嵌成 undefined → 退回 localhost → Cloudflare error 1003）。
-  "vars": {
-    "API_HOST": "https://adfusion-backend-893008545922.asia-east1.run.app"
+  "workers_dev": false,
+  "secrets": {
+    "required": ["INTERNAL_KEY", "JWT_SECRET", "PAGESPEED_API_KEY", "PHP_SERVICE_AUTH_SECRET"]
   },
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-  "services": [
-    {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "highlightsignal"
+  "env": {
+    "staging": {
+      "workers_dev": false,
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "API_HOST": "https://staging.invalid"
+      },
+      "assets": {
+        "directory": ".open-next/assets",
+        "binding": "ASSETS"
+      },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "highlightsignal-staging"
+        }
+      ],
+      "secrets": {
+        "required": ["INTERNAL_KEY", "JWT_SECRET", "PAGESPEED_API_KEY", "PHP_SERVICE_AUTH_SECRET"]
+      },
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1
+      }
+    },
+    "production": {
+      "workers_dev": false,
+      "vars": {
+        "ENVIRONMENT": "production",
+        "API_HOST": "https://adfusion-backend-893008545922.asia-east1.run.app"
+      },
+      "assets": {
+        "directory": ".open-next/assets",
+        "binding": "ASSETS"
+      },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "highlightsignal-production"
+        }
+      ],
+      "secrets": {
+        "required": ["INTERNAL_KEY", "JWT_SECRET", "PAGESPEED_API_KEY", "PHP_SERVICE_AUTH_SECRET"]
+      },
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 0.1
+      }
     }
-  ]
+  }
 }
