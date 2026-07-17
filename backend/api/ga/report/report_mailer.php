@@ -1,8 +1,15 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/report_excel.php';
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+error_reporting(E_ALL);
+
+function loadReportDependencies()
+{
+    require_once __DIR__ . '/config.php';
+    require_once __DIR__ . '/report_excel.php';
+}
 
 function buildSubject($schedule, $type, $startDate, $endDate)
 {
@@ -228,6 +235,7 @@ function buildEmailHtml($schedule, $type, $startDate, $endDate)
 
 function sendReportMail($scheduleId, $startDate, $endDate, $type)
 {
+    loadReportDependencies();
     $schedule = getScheduleById((int)$scheduleId);
     if (!$schedule) {
         throw new RuntimeException("找不到 schedule_id={$scheduleId}");
@@ -324,16 +332,17 @@ if (isDirectExecution()) {
         exit;
     }
 
-    $ownerCheck = db()->prepare('SELECT user_id FROM ga_report_schedules WHERE id = ? LIMIT 1');
-    $ownerCheck->execute(array($scheduleId));
-    $ownerId = (int) $ownerCheck->fetchColumn();
-    if ($ownerId <= 0 || $ownerId !== $serviceMemberId) {
-        http_response_code(403);
-        echo json_encode(array('ok' => false, 'error' => 'Report access denied'));
-        exit;
-    }
-
     try {
+        loadReportDependencies();
+        $ownerCheck = db()->prepare('SELECT user_id FROM ga_report_schedules WHERE id = ? LIMIT 1');
+        $ownerCheck->execute(array($scheduleId));
+        $ownerId = (int) $ownerCheck->fetchColumn();
+        if ($ownerId <= 0 || $ownerId !== $serviceMemberId) {
+            http_response_code(403);
+            echo json_encode(array('ok' => false, 'error' => 'Report access denied'));
+            exit;
+        }
+
         $result = sendReportMail($scheduleId, $startDate, $endDate, $type);
         echo json_encode(array(
             'ok' => true,
@@ -341,9 +350,11 @@ if (isDirectExecution()) {
         ), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         exit;
     } catch (Throwable $e) {
+        error_log($e->getMessage());
+        http_response_code(500);
         echo json_encode(array(
             'ok' => false,
-            'error' => 'Report delivery failed',
+            'error' => 'Report service is unavailable',
         ), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         exit;
     }
