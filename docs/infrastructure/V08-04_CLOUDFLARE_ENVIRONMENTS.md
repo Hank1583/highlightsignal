@@ -25,6 +25,11 @@ Next.js 16.2.7 deprecates `middleware.ts` in favor of `proxy.ts`, but Proxy alwa
 
 ## Promotion and rollback
 
+Owner policy as of 2026-07-17: no Cloudflare environment is promoted or
+deployed until the complete V1.2 roadmap has passed acceptance. The following
+runbook is retained for that future gate; through V1.1 only build, startup
+analysis, and explicit `--dry-run` validation are allowed.
+
 1. Build and pass the release gate without production credentials.
 2. Provision the four secret names separately for the target named environment.
 3. Run the named environment dry-run and inspect the Worker name, service binding, and asset manifest.
