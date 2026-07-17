@@ -81,7 +81,7 @@ wrangler.jsonc
 - [ ] Server-only secret 不可進入 `NEXT_PUBLIC_*` 或 browser bundle。
 - [ ] PHP 與 Next.js 缺 secret 時 fail closed。
 - [ ] 已曝露 credential 全部完成輪替，或明確標記 `BLOCKED_EXTERNAL_ROTATION`，不得宣稱完整 DONE。
-- [ ] Staging 以新秘密完成 health、auth 與至少一個 signed API smoke test。
+- [ ] 依 2026-07-17 owner decision，在現行 pre-launch target 以輪替後秘密完成 health、auth 與至少一個 signed API smoke test；不另建 staging。
 - [ ] 主 Tracker 收到不含秘密的驗證證據。
 
 # Execution-chat prompt

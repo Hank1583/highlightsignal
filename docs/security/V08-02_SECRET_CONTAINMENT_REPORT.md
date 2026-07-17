@@ -136,22 +136,31 @@ V08-05 because this workstation has no PHP executable.
 | AdFusion internal key | Prepare replacement on AdFusion backend; update Cloudflare secret; verify login/token exchange; revoke old key | Successful and rejected internal-auth paths | Keep old key active until new path passes |
 | Cloudflare deployment token | Create scoped replacement token; update CI/operator secret store; verify read and dry-run/deployment permissions; revoke old token | `wrangler whoami` and approved deployment workflow | Restore old CI secret before token revocation |
 
-## Actions requiring explicit authorization
+## Pre-launch in-place cutover authorization
 
-No production credential was created, changed, revoked, or deleted in this
-task. The following actions require the user's explicit authorization and
-provider/host access:
+On 2026-07-17 the owner confirmed that Highlight Signal is not formally live,
+authorized changes to the current test data and schema, and selected the
+existing 智邦 `/highlightsignal/v2` path and current MySQL database as the
+pre-launch integration environment. No staging directory, subdomain, or test
+database will be created.
+
+This authorizes a controlled in-place secret cutover after backup. It does not
+permit secret values in Git/output, an unbacked destructive failure test, or
+revoking an old provider credential before the replacement passes verification.
+Provider/host access is still required to execute:
 
 1. Rotate the exposed MySQL, OpenAI, Google API/PageSpeed, OAuth, Google
    service-account, and report automation credentials.
 2. Configure `PHP_SERVICE_AUTH_SECRET` in Cloudflare and the matching
-   `SERVICE_AUTH_SECRET` on PHP staging, then run a signed staging smoke test.
-3. Rebuild the production PHP deployment from this repository and retire or
+   `SERVICE_AUTH_SECRET` on the current pre-launch PHP path, then run a signed
+   smoke test.
+3. Back up the current PHP payload and database, rebuild the PHP deployment
+   from this repository in place, and retire or
    quarantine the credential-bearing legacy mirror.
 4. Decide whether to rotate JWT, AdFusion internal, and Cloudflare deployment
    credentials despite no repository/bundle exposure finding.
 
-Until required rotations and the staging signed smoke test are complete, this
+Until required rotations and the in-place signed smoke test are complete, this
 task must remain `BLOCKED_EXTERNAL_ROTATION` and may not be marked `DONE`.
 
 Because the host runtime is fixed, V08-05 must execute PHP 7.0-compatible lint
@@ -175,4 +184,8 @@ switch.
 | PHP fail-closed static checks | PASS |
 | Wrangler secret-name inventory | PASS, values not requested or returned |
 | Post-change Wrangler dry-run | NOT RUN; execution environment rejected external bundle transfer |
-| PHP lint and staging signed smoke test | BLOCKED; no local PHP runtime or approved staging credential cutover |
+| Current health endpoint | PASS, HTTP 200 |
+| Current unsigned workspace request | PASS, HTTP 401 |
+| Current internal bootstrap and environment source paths | PASS, HTTP 403 |
+| Unknown authenticated route without a signature | HTTP 401 at authentication boundary; route-level 404 requires a valid signed request |
+| PHP lint and in-place signed smoke test | BLOCKED; no local PHP runtime and no provider/hosting cutover evidence yet |

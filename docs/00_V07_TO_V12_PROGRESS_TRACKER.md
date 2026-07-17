@@ -44,8 +44,8 @@ DEFERRED    已決定延後，不計入目前版本
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
 | Active task | `V08-02` BLOCKED_EXTERNAL_ROTATION |
-| Next task | 取得 production credential rotation 與 staging secret cutover 明確授權 |
-| Blocking issue | Legacy PHP mirror 含已曝露的 DB、OpenAI、Google API/OAuth、service-account 與 report credential；Cloudflare 缺 `PHP_SERVICE_AUTH_SECRET`；尚未完成 staging signed smoke test；智邦 runtime 固定 PHP 7.0／MySQL 5.6 |
+| Next task | 在現行智邦 `/highlightsignal/v2` 與現有 DB 執行備份、private secret 原地切換及 signed smoke test |
+| Blocking issue | 原地切換授權已取得，但仍缺 provider／hosting 實際操作與輪替證據；Cloudflare 缺 `PHP_SERVICE_AUTH_SECRET`；智邦 runtime 固定 PHP 7.0／MySQL 5.6 |
 | Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：
@@ -82,8 +82,13 @@ Blocker ID: BLOCKED_EXTERNAL_ROTATION
 Since: 2026-07-17
 Affected task: V08-02 Secret containment
 Local containment evidence: docs/security/V08-02_SECRET_CONTAINMENT_REPORT.md
-Required change to resume: explicit authorization and provider/hosting access for credential rotation, Cloudflare/PHP secret provisioning, and staging signed smoke test
+Required change to resume: provider/hosting access for credential rotation, Cloudflare/PHP secret provisioning, and signed smoke test on the authorized pre-launch integration path
 ```
+
+2026-07-17 owner decision：Highlight Signal 尚未正式啟用，沿用現行智邦
+`/highlightsignal/v2` 與現有 MySQL database 作為 pre-launch integration
+environment；不建立 staging 目錄、子網域或測試 DB。測試資料與 table 可在備份及
+可回滾 migration 前提下調整，但不得對現有 DB 執行破壞性的 failure simulation。
 
 2026-07-17 已驗證：
 
