@@ -58,19 +58,25 @@ npm run deploy:cf
 
 ## PHP Backend
 
-The PHP source of truth is maintained outside this Next.js app:
+The version-controlled PHP source of truth is maintained in this repository:
 
 ```text
-D:\7.Highlight\1.Project\4.php\highlightsignal
+backend/api/   # deployable PHP application payload
+backend/sql/   # reviewed MySQL schema and migration sources
 ```
 
-This web repository should not keep a duplicate `backend/` folder. Frontend API calls are routed through:
+The older working directory at
+`D:\7.Highlight\1.Project\4.php\highlightsignal` is a legacy/deployment mirror. It
+may be used to compare an existing host payload, but changes must be reconciled
+back into `backend/` before they are considered part of a release.
+
+Frontend API calls are routed through:
 
 ```text
-NEXT_PUBLIC_HIGHLIGHT_PHP_API_BASE_URL=https://www.highlight.url.tw/highlightsignal
+NEXT_PUBLIC_HIGHLIGHT_PHP_API_BASE_URL=https://www.highlight.url.tw/highlightsignal/v2
 ```
 
-Relevant PHP paths in the PHP project:
+Relevant PHP paths in this repository:
 
 - `ga/*`
 - `si/*`
@@ -87,7 +93,11 @@ Relevant PHP paths in the PHP project:
 - Pro: 100 asks per day
 - Admin: 500 asks per day
 
-Smoke test the PHP endpoints after deployment because this repository does not include a local PHP runtime.
+Follow `backend/api/UPLOAD_README.md` to assemble a deployment payload. Runtime
+`.env`, credential JSON, `vendor/`, generated storage, and server-only
+`ga/report/config.php` are deliberately excluded from Git. Smoke test the PHP
+endpoints in staging after deployment because this repository does not include
+a local PHP runtime.
 
 ## Release Scope
 
@@ -105,3 +115,9 @@ Out of scope for this app:
 - CRM
 - Salesbot
 - Full ADS implementation
+
+## Product Planning
+
+The accepted V1 boundary and phased roadmap are documented in
+`docs/00_Technical_Specification_Alignment_v1.2.md` and
+`docs/00_V07_TO_V12_PROGRESS_TRACKER.md`.
