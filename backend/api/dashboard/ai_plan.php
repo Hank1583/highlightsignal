@@ -3,55 +3,7 @@
 declare(strict_types=1);
 
 $helperPath = __DIR__ . '/../api_helpers.php';
-if (is_file($helperPath)) {
-    require_once $helperPath;
-}
-
-if (!function_exists('hs_json')) {
-    header('Content-Type: application/json; charset=utf-8');
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Headers: Content-Type, X-Member-Id, X-Member-Email, X-Member-Name, X-Member-Role, X-Enabled-Products');
-    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-
-    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-        http_response_code(204);
-        exit;
-    }
-
-    function hs_json($payload, $status = 200)
-    {
-        http_response_code($status);
-        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        exit;
-    }
-
-    function hs_input()
-    {
-        $raw = file_get_contents('php://input');
-        $data = $raw ? json_decode($raw, true) : [];
-        return is_array($data) ? $data : [];
-    }
-
-    function hs_header($name, $default = '')
-    {
-        $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
-        return isset($_SERVER[$key]) ? trim((string)$_SERVER[$key]) : $default;
-    }
-
-    function hs_member_id($input = [])
-    {
-        $memberId = (int)(hs_header('X-Member-Id') ?: ($input['member_id'] ?? $input['user_id'] ?? 0));
-        if ($memberId <= 0) {
-            hs_json(['ok' => false, 'message' => 'Unauthorized: member_id missing'], 401);
-        }
-        return $memberId;
-    }
-
-    function hs_request_user($input = [])
-    {
-        return ['id' => hs_member_id($input)];
-    }
-}
+require_once $helperPath;
 
 $dbPath = __DIR__ . '/../db_connect.php';
 if (!is_file($dbPath)) {

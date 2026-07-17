@@ -1,4 +1,7 @@
 <?php
+
+use HighlightSignal\Config\Environment;
+
 require_once __DIR__ . '/../db_connect.php'; // 資料庫連線
 
 $client_id = (string) getenv("GOOGLE_CLIENT_ID");
@@ -16,11 +19,31 @@ if (!isset($_GET["code"])) {
 }
 
 $code = $_GET["code"];
-$state = json_decode(base64_decode($_GET["state"] ?? ""), true);
-$member_id = isset($state["member_id"]) ? intval($state["member_id"]) : 0;
+$rawState = (string) ($_GET['state'] ?? '');
+$stateParts = explode('.', $rawState, 2);
+if (count($stateParts) !== 2) {
+    http_response_code(400);
+    die('Invalid OAuth state');
+}
 
-if ($member_id <= 0) {
-    die("Missing member_id");
+list($encodedState, $providedStateSignature) = $stateParts;
+$expectedStateSignature = hash_hmac('sha256', $encodedState, Environment::require('SERVICE_AUTH_SECRET'));
+if (!hash_equals($expectedStateSignature, $providedStateSignature)) {
+    http_response_code(400);
+    die('Invalid OAuth state');
+}
+
+$padding = strlen($encodedState) % 4;
+if ($padding > 0) {
+    $encodedState .= str_repeat('=', 4 - $padding);
+}
+$state = json_decode(base64_decode(strtr($encodedState, '-_', '+/'), true), true);
+$member_id = isset($state["member_id"]) ? intval($state["member_id"]) : 0;
+$stateTimestamp = isset($state['ts']) ? (int) $state['ts'] : 0;
+
+if ($member_id <= 0 || $stateTimestamp <= 0 || abs(time() - $stateTimestamp) > 600) {
+    http_response_code(400);
+    die('Expired OAuth state');
 }
 
 // Step 2: 用 code 換 access_token + refresh_token
@@ -38,7 +61,12 @@ $tokenData = file_get_contents("https://oauth2.googleapis.com/token", false, str
     ]
 ]));
 
-$tokens = json_decode($tokenData, true);
+$tokens = json_decode((string) $tokenData, true);
+
+if (!is_array($tokens) || empty($tokens['access_token']) || empty($tokens['refresh_token'])) {
+    http_response_code(502);
+    die('Google token exchange failed');
+}
 
 $access_token = $tokens["access_token"];
 $refresh_token = $tokens["refresh_token"]; // 之後排程抓 GA 必用！
@@ -51,7 +79,7 @@ function callGA($url, $access_token)
 
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         "Authorization: Bearer $access_token",
         "Accept: application/json"
@@ -60,7 +88,7 @@ function callGA($url, $access_token)
     $response = curl_exec($ch);
 
     if (curl_errno($ch)) {
-        echo "CURL ERROR: " . curl_error($ch);
+        error_log(curl_error($ch));
         return null;
     }
 

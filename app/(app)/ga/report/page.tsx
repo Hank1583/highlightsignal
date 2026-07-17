@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import PageHeader from "@/components/ga/PageHeader";
 import SectionCard from "@/components/ga/SectionCard";
-import { highlightPhpApiUrl } from "@/lib/config";
 import { useCurrentUser, useGaReportList, type GaReportRow } from "../dataSource";
 
 const weekdayMap: Record<number, string> = {
@@ -102,7 +101,7 @@ export default function ReportPage() {
       type: sendType,
     });
 
-    return highlightPhpApiUrl(`ga/report/report_mailer.php?${params.toString()}`);
+    return `/api/ga/report/send?${params.toString()}`;
   }, [selectedRow, resolvedRange, sendType]);
 
   const openSendModal = (row: GaReportRow) => {

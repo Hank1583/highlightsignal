@@ -5,7 +5,7 @@ import type {
   SeoSummaryResponse,
 } from "@/lib/seo/types";
 import { highlightPhpApiUrl } from "@/lib/config";
-import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
+import { signedPhpFetch } from "@/lib/signedPhpFetch";
 
 const PHP_API_BASE = highlightPhpApiUrl("si/seo");
 
@@ -38,15 +38,14 @@ async function parseJsonSafe<T>(res: Response): Promise<T> {
 export async function phpListSeoSites(
   userId: number
 ): Promise<SeoListResponse> {
-  const res = await fetchWithTimeout(`${PHP_API_BASE}/list.php`, {
+  const body = JSON.stringify({ user_id: userId });
+  const res = await signedPhpFetch(`${PHP_API_BASE}/list.php`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      user_id: userId,
-    }),
-  });
+    body,
+  }, { memberId: userId });
 
   const json = await parseJsonSafe<SeoListResponse>(res);
 
@@ -60,13 +59,14 @@ export async function phpListSeoSites(
 export async function phpAddSeoSite(
   payload: SeoAddPayload
 ): Promise<SeoAddResponse> {
-  const res = await fetch(`${PHP_API_BASE}/add.php`, {
+  const body = JSON.stringify(payload);
+  const res = await signedPhpFetch(`${PHP_API_BASE}/add.php`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(payload),
-  });
+    body,
+  }, { memberId: payload.user_id });
 
   const json = await parseJsonSafe<SeoAddResponse>(res);
 
@@ -82,17 +82,14 @@ export async function phpGetSeoSummary(
   siteId: number,
   options?: { force?: boolean }
 ): Promise<SeoSummaryResponse> {
-  const res = await fetchWithTimeout(`${PHP_API_BASE}/summary.php`, {
+  const body = JSON.stringify({ user_id: userId, site_id: siteId, force: Boolean(options?.force) });
+  const res = await signedPhpFetch(`${PHP_API_BASE}/summary.php`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      user_id: userId,
-      site_id: siteId,
-      force: Boolean(options?.force),
-    }),
-  }, 8_000);
+    body,
+  }, { memberId: userId });
 
   const json = await parseJsonSafe<SeoSummaryResponse>(res);
 

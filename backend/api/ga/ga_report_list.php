@@ -1,9 +1,10 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . "/../db_connect.php";
+require_once __DIR__ . "/../legacy_auth.php";
 
 $input = json_decode(file_get_contents("php://input"), true);
-$user_id = intval($input['user_id'] ?? 0);
+$user_id = hs_require_service_member($conn, $input['user_id'] ?? 0);
 
 if ($user_id <= 0) {
     echo json_encode([

@@ -287,14 +287,6 @@ function isDirectExecution()
 
 if (isDirectExecution()) {
     header("Content-Type: application/json; charset=utf-8");
-    header("Access-Control-Allow-Origin: *");
-    header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-    header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
-
-    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-        http_response_code(204);
-        exit;
-    }
 
     if (PHP_SAPI === 'cli') {
         if (!isset($argv[1], $argv[2], $argv[3], $argv[4])) {
@@ -312,6 +304,10 @@ if (isDirectExecution()) {
         }
     }
 
+    require_once __DIR__ . '/../../db_connect.php';
+    require_once __DIR__ . '/../../legacy_auth.php';
+    $serviceMemberId = hs_require_service_member($conn);
+
     $scheduleId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
     $startDate = isset($_GET['start']) ? (string)$_GET['start'] : '';
     $endDate = isset($_GET['end']) ? (string)$_GET['end'] : '';
@@ -325,6 +321,15 @@ if (isDirectExecution()) {
         exit;
     }
 
+    $ownerCheck = db()->prepare('SELECT user_id FROM ga_report_schedules WHERE id = ? LIMIT 1');
+    $ownerCheck->execute(array($scheduleId));
+    $ownerId = (int) $ownerCheck->fetchColumn();
+    if ($ownerId <= 0 || $ownerId !== $serviceMemberId) {
+        http_response_code(403);
+        echo json_encode(array('ok' => false, 'error' => 'Report access denied'));
+        exit;
+    }
+
     try {
         $result = sendReportMail($scheduleId, $startDate, $endDate, $type);
         echo json_encode(array(
@@ -335,7 +340,7 @@ if (isDirectExecution()) {
     } catch (Throwable $e) {
         echo json_encode(array(
             'ok' => false,
-            'error' => $e->getMessage(),
+            'error' => 'Report delivery failed',
         ), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         exit;
     }

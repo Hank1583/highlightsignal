@@ -1,4 +1,5 @@
 import { highlightPhpApiUrl } from "@/lib/config";
+import { signedPhpFetch } from "@/lib/signedPhpFetch";
 import type {
   SiHistoryResponse,
   SiModule,
@@ -39,17 +40,14 @@ export async function phpGetSiSummary({
   siteId: number;
   tab: string;
 }): Promise<SiSummaryResponse> {
-  const res = await fetch(highlightPhpApiUrl(`si/${module}/summary.php`), {
+  const body = JSON.stringify({ user_id: userId, site_id: siteId, tab });
+  const res = await signedPhpFetch(highlightPhpApiUrl(`si/${module}/summary.php`), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      user_id: userId,
-      site_id: siteId,
-      tab,
-    }),
-  });
+    body,
+  }, { memberId: userId });
 
   const json = await parseJsonSafe<SiSummaryResponse>(res);
 
@@ -71,17 +69,14 @@ export async function phpGenerateSiSummary({
   siteId: number;
   tab: string;
 }): Promise<SiSummaryResponse> {
-  const res = await fetch(highlightPhpApiUrl(`si/${module}/generate.php`), {
+  const body = JSON.stringify({ user_id: userId, site_id: siteId, tab });
+  const res = await signedPhpFetch(highlightPhpApiUrl(`si/${module}/generate.php`), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      user_id: userId,
-      site_id: siteId,
-      tab,
-    }),
-  });
+    body,
+  }, { memberId: userId });
 
   const json = await parseJsonSafe<SiSummaryResponse>(res);
 
@@ -105,18 +100,14 @@ export async function phpGetSiHistory({
   tab: string;
   limit?: number;
 }): Promise<SiHistoryResponse> {
-  const res = await fetch(highlightPhpApiUrl(`si/${module}/history.php`), {
+  const body = JSON.stringify({ user_id: userId, site_id: siteId, tab, limit });
+  const res = await signedPhpFetch(highlightPhpApiUrl(`si/${module}/history.php`), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      user_id: userId,
-      site_id: siteId,
-      tab,
-      limit,
-    }),
-  });
+    body,
+  }, { memberId: userId });
 
   const json = await parseJsonSafe<SiHistoryResponse>(res);
 
@@ -130,15 +121,14 @@ export async function phpGetSiHistory({
 }
 
 export async function phpListSiSites(userId: number): Promise<SiSitesResponse> {
-  const res = await fetch(highlightPhpApiUrl("si/sites/list.php"), {
+  const body = JSON.stringify({ user_id: userId });
+  const res = await signedPhpFetch(highlightPhpApiUrl("si/sites/list.php"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      user_id: userId,
-    }),
-  });
+    body,
+  }, { memberId: userId });
 
   const json = await parseJsonSafe<SiSitesResponse>(res);
 

@@ -1,17 +1,17 @@
 <?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../db_connect.php';
+require_once __DIR__ . '/../legacy_auth.php';
+
+$member_id = hs_require_service_member($conn, $_GET['member_id'] ?? 0);
 //----------------------------------------
 // 1. 禁用所有 Buffer（HTML 即時輸出必要）
 //----------------------------------------
 header("Content-Type: text/html; charset=utf-8");
 header("Cache-Control: no-cache");
 header("X-Accel-Buffering: no");
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
-
-if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
-    exit;
-}
 
 ini_set('output_buffering', 'off');
 ini_set('zlib.output_compression', false);
@@ -52,7 +52,6 @@ body { background:#1a1a1a; color:#ddd; font-family: Consolas, monospace; }
 echo str_repeat(" ", 4096) . "\n"; // 強制讓 Nginx / Browser flush
 flush();
 
-require_once __DIR__ . '/../db_connect.php';
 require_once "api_client.php";
 
 $client_id = (string) getenv("GOOGLE_CLIENT_ID");
@@ -68,7 +67,6 @@ if ($client_id === '' || $client_secret === '') {
  *****************************************************/
 $startDate = $_GET["start"] ?? null;
 $endDate   = $_GET["end"] ?? null;
-$member_id = $_GET["member_id"] ?? null;
 
 function is_valid_ymd($date) {
     return is_string($date) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date);

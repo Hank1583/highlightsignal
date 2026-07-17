@@ -3,14 +3,6 @@
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Headers: Content-Type, X-Member-Id, X-Member-Email, X-Member-Name, X-Member-Role, X-Enabled-Products');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(204);
-    exit;
-}
 
 function si_json(array $payload, int $status = 200)
 {
@@ -44,6 +36,9 @@ if (!file_exists($dbConnectPath)) {
 }
 
 require_once $dbConnectPath;
+require_once __DIR__ . '/../legacy_auth.php';
+
+$siServiceIdentity = hs_require_service_identity($conn);
 
 function si_db(): mysqli
 {
@@ -88,6 +83,11 @@ function si_positive_int(array $data, string $key): int
 
     if ($value <= 0) {
         si_fail('MISSING_' . strtoupper($key), $key . ' is required.', 400);
+    }
+
+    if ($key === 'user_id') {
+        global $conn;
+        return hs_require_service_member($conn, $value);
     }
 
     return $value;

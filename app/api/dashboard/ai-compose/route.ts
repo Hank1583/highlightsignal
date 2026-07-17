@@ -3,13 +3,14 @@ import { highlightPhpApiUrl } from "@/lib/config";
 import { isDemoSession } from "@/lib/demo";
 import { gaQuery, getGAConnections } from "@/lib/ga/gaApi";
 import { phpGetSeoSummary, phpListSeoSites } from "@/lib/seo/seoApi";
-import { getServerSession, phpAuthHeaders, type ServerSession } from "@/lib/serverSession";
+import { getServerSession, type ServerSession } from "@/lib/serverSession";
 import { hasGaAccess, hasSearchIntelligenceAccess } from "@/lib/subscription";
 import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 import {
   checkDashboardAiQuota,
   recordDashboardAiUsage,
 } from "@/lib/dashboardAiQuota";
+import { signedPhpFetch } from "@/lib/signedPhpFetch";
 
 type GaConnection = {
   id: number | string;
@@ -343,13 +344,14 @@ function sanitizePlan(value: unknown, question: string): DashboardPlan {
   };
 }
 
-async function requestPlan(question: string, sessionHeaders: HeadersInit) {
+async function requestPlan(question: string, session: ServerSession) {
   try {
-    const response = await fetch(highlightPhpApiUrl("dashboard/ai_plan.php"), {
+    const body = JSON.stringify({ question });
+    const response = await signedPhpFetch(highlightPhpApiUrl("dashboard/ai_plan.php"), {
       method: "POST",
-      headers: sessionHeaders,
-      body: JSON.stringify({ question }),
-    });
+      headers: { "Content-Type": "application/json" },
+      body,
+    }, { memberId: session.id });
 
     const json = (await response.json()) as { plan?: unknown; source?: string };
     return {
@@ -715,7 +717,7 @@ export async function POST(req: Request) {
     const preset = presetPlan(presetId, question);
     const { plan, source } = preset
       ? { plan: preset, source: "preset_rules" }
-      : await requestPlan(question, phpAuthHeaders(session));
+      : await requestPlan(question, session);
     const days = planDays(plan, question);
     const start = dateDaysAgo(days);
     const end = today();

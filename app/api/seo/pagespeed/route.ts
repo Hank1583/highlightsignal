@@ -4,6 +4,7 @@ import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";
 import { getServerSession } from "@/lib/serverSession";
 import { hasSearchIntelligenceAccess } from "@/lib/subscription";
 import { resolveWorkspaceContext } from "@/lib/workspaceServer";
+import { signedPhpFetch } from "@/lib/signedPhpFetch";
 
 type Strategy = "mobile" | "desktop";
 
@@ -74,20 +75,21 @@ export async function POST(req: NextRequest) {
     const endpoint = action === "history"
       ? "si/seo/pagespeed_history.php"
       : "si/seo/pagespeed.php";
-    const phpRes = await fetch(highlightPhpApiUrl(endpoint), {
+    const phpBody = JSON.stringify({
+      action,
+      user_id: workspace.legacyOwnerMemberId,
+      site_id: siteId,
+      strategy,
+      url: body?.url,
+      limit: body?.limit,
+    });
+    const phpRes = await signedPhpFetch(highlightPhpApiUrl(endpoint), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        action,
-        user_id: workspace.legacyOwnerMemberId,
-        site_id: siteId,
-        strategy,
-        url: body?.url,
-        limit: body?.limit,
-      }),
-    });
+      body: phpBody,
+    }, { memberId: workspace.legacyOwnerMemberId, workspaceId: workspace.workspaceId });
 
     const json = await parsePhpJson(phpRes);
 

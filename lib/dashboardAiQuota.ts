@@ -1,5 +1,6 @@
 import { highlightPhpApiUrl } from "@/lib/config";
 import type { ServerSession } from "@/lib/serverSession";
+import { signedPhpFetch } from "@/lib/signedPhpFetch";
 
 export type DashboardAiQuota = {
   allowed: boolean;
@@ -24,18 +25,14 @@ async function requestUsage(
   session: ServerSession,
   payload: Record<string, unknown>
 ) {
-  const response = await fetch(highlightPhpApiUrl("dashboard/ai_usage.php"), {
+  const body = JSON.stringify(payload);
+  const response = await signedPhpFetch(highlightPhpApiUrl("dashboard/ai_usage.php"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Member-Id": session.id,
-      "X-Member-Email": session.email,
-      "X-Member-Name": session.name,
-      "X-Member-Role": session.role,
-      "X-Enabled-Products": session.enabledProducts.join(","),
     },
-    body: JSON.stringify(payload),
-  });
+    body,
+  }, { memberId: session.id });
 
   if (!response.ok) {
     throw new Error("Dashboard AI usage API failed");

@@ -1,6 +1,8 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . "/../db_connect.php";
+require_once __DIR__ . "/../legacy_auth.php";
+require_once __DIR__ . "/ownership.php";
 
 $input = json_decode(file_get_contents("php://input"), true);
 
@@ -13,7 +15,7 @@ if (!$input) {
 }
 
 $id = intval($input['id'] ?? 0);
-$user_id = intval($input['user_id'] ?? 0);
+$user_id = hs_require_service_member($conn, $input['user_id'] ?? 0);
 
 if ($id <= 0) {
     echo json_encode(['success' => false, 'message' => 'id 錯誤']);
@@ -29,6 +31,7 @@ if ($user_id <= 0) {
 $report_name    = trim($input['report_name'] ?? '');
 $report_type    = $input['report_type'] ?? '';
 $connection_ids = $input['connection_ids'] ?? [];
+$connection_ids = ga_require_connection_ownership($conn, $user_id, is_array($connection_ids) ? $connection_ids : array());
 
 $send_weekday   = isset($input['send_weekday']) ? intval($input['send_weekday']) : null;
 $send_monthday  = isset($input['send_monthday']) ? intval($input['send_monthday']) : null;
@@ -82,8 +85,7 @@ $success = $stmt->execute();
 if (!$success) {
     echo json_encode([
         'success' => false,
-        'message' => '更新失敗',
-        'error' => $stmt->error
+        'message' => '更新失敗'
     ]);
     exit;
 }

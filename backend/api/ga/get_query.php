@@ -1,11 +1,14 @@
 <?php
 header("Content-Type: application/json; charset=utf-8");
 require_once __DIR__ . "/../db_connect.php";
+require_once __DIR__ . "/../legacy_auth.php";
+require_once __DIR__ . "/ownership.php";
 
 /* =========================
    1️⃣ Read JSON Body
 ========================= */
 $input = json_decode(file_get_contents("php://input"), true);
+$memberId = hs_require_service_member($conn, isset($input['user_id']) ? $input['user_id'] : 0);
 
 $type  = $input['type']  ?? null;
 $ids   = $input['ids']   ?? [];
@@ -19,8 +22,7 @@ if (
 ) {
   echo json_encode([
     "ok" => false,
-    "message" => "Invalid parameters",
-    "debug" => $input
+    "message" => "Invalid parameters"
   ]);
   exit;
 }
@@ -30,6 +32,8 @@ if (
 ========================= */
 $ids = array_map("intval", $ids);
 $placeholders = implode(",", array_fill(0, count($ids), "?"));
+
+ga_require_connection_ownership($conn, $memberId, $ids);
 
 /* =========================
    3️⃣ Router by type
@@ -154,8 +158,7 @@ $stmt = $conn->prepare($sql);
 if (!$stmt) {
   echo json_encode([
     "ok" => false,
-    "message" => "SQL prepare failed",
-    "error" => $conn->error
+    "message" => "Database operation failed"
   ]);
   exit;
 }

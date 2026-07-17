@@ -1,5 +1,5 @@
 import { highlightPhpApiUrl } from "@/lib/config";
-import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
+import { signedPhpFetch } from "@/lib/signedPhpFetch";
 
 const BASE_URL = highlightPhpApiUrl("ga");
 
@@ -8,13 +8,13 @@ export async function getGAConnections(
   memberId: number,
   includeInactive = false
 ) {
-  const res = await fetchWithTimeout(`${BASE_URL}/get_connections.php`, {
+  const res = await signedPhpFetch(`${BASE_URL}/get_connections.php`, {
     headers: {
       "X-Member-Id": String(memberId),
       ...(includeInactive ? { "X-Include-Inactive": "1" } : {}),
     },
     cache: "no-store",
-  }, 8_000);
+  }, { memberId });
   // console.log("res:"+memberId+":"+res);
 
   const text = await res.text();
@@ -38,17 +38,15 @@ export async function updateGAConnectionStatus(
   connectionId: number,
   status: 0 | 1
 ) {
-  const res = await fetch(`${BASE_URL}/update_connection_status.php`, {
+  const body = JSON.stringify({ connection_id: connectionId, status });
+  const res = await signedPhpFetch(`${BASE_URL}/update_connection_status.php`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Member-Id": String(memberId),
     },
-    body: JSON.stringify({
-      connection_id: connectionId,
-      status,
-    }),
-  });
+    body,
+  }, { memberId });
 
   const json = await res.json();
   if (!res.ok || !json?.ok) {
@@ -69,14 +67,15 @@ export async function gaQuery(
   }
 ) {
   // console.log(params);
-  const res = await fetchWithTimeout(`${BASE_URL}/get_query.php`, {
+  const body = JSON.stringify(params);
+  const res = await signedPhpFetch(`${BASE_URL}/get_query.php`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Member-Id": String(memberId),
     },
-    body: JSON.stringify(params),
-  }, 10_000);
+    body,
+  }, { memberId });
 
   const text = await res.text();
 
@@ -96,13 +95,14 @@ export async function gaQuery(
 
 /** GA Report */
 export async function getGaReportList(userId: number) {
-  const res = await fetch(`${BASE_URL}/ga_report_list.php`, {
+  const body = JSON.stringify({ user_id: userId });
+  const res = await signedPhpFetch(`${BASE_URL}/ga_report_list.php`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ user_id: userId }),
-  });
+    body,
+  }, { memberId: userId });
 // console.log(`${BASE_URL}/api/ga/ga_report_list.php`);
   const json = await res.json();
 // console.log(json);
@@ -114,16 +114,14 @@ export async function getGaReportList(userId: number) {
 }
 
 export async function createGaReport(userId: number, payload: any) {
-  const res = await fetch(`${BASE_URL}/ga_report_save.php`, {
+  const body = JSON.stringify({ user_id: userId, ...payload });
+  const res = await signedPhpFetch(`${BASE_URL}/ga_report_save.php`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      user_id: userId,
-      ...payload,
-    }),
-  });
+    body,
+  }, { memberId: userId });
 
   const rawText = await res.text();
 
@@ -146,16 +144,14 @@ export async function createGaReport(userId: number, payload: any) {
 }
 
 export async function getGaReportDetail(user_id: number,id: number){
-  const res = await fetch(`${BASE_URL}/ga_report_detail.php`, {
+  const body = JSON.stringify({ user_id, id });
+  const res = await signedPhpFetch(`${BASE_URL}/ga_report_detail.php`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      user_id,
-      id,
-    }),
-  });
+    body,
+  }, { memberId: user_id });
 
   const result = await res.json();
   if (!res.ok) {
@@ -170,17 +166,14 @@ export async function updateGaReport(
   id: number,
   payload: any
 ) {
-  const res = await fetch(`${BASE_URL}/ga_report_update.php`, {
+  const body = JSON.stringify({ user_id: userId, id, ...payload });
+  const res = await signedPhpFetch(`${BASE_URL}/ga_report_update.php`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      user_id: userId,
-      id,
-      ...payload,
-    }),
-  });
+    body,
+  }, { memberId: userId });
 
   const result = await res.json();
 

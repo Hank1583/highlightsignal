@@ -1,6 +1,8 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . "/../db_connect.php";
+require_once __DIR__ . "/../legacy_auth.php";
+require_once __DIR__ . "/ownership.php";
 
 $input = json_decode(file_get_contents("php://input"), true);
 
@@ -12,7 +14,7 @@ if (!$input) {
     exit;
 }
 
-$user_id        = intval(isset($input['user_id']) ? $input['user_id'] : 0);
+$user_id        = hs_require_service_member($conn, isset($input['user_id']) ? $input['user_id'] : 0);
 $report_name    = trim(isset($input['report_name']) ? $input['report_name'] : '');
 $report_type    = isset($input['report_type']) ? $input['report_type'] : '';
 $connection_ids = isset($input['connection_ids']) ? $input['connection_ids'] : array();
@@ -56,6 +58,8 @@ if (count($connection_ids) === 0) {
     exit;
 }
 
+$connection_ids = ga_require_connection_ownership($conn, $user_id, $connection_ids);
+
 if (!is_array($email_list) || count($email_list) === 0) {
     echo json_encode(array('success' => false, 'message' => '請填寫 email'), JSON_UNESCAPED_UNICODE);
     exit;
@@ -89,8 +93,7 @@ $stmt = $conn->prepare("
 if (!$stmt) {
     echo json_encode(array(
         'success' => false,
-        'message' => 'prepare 失敗',
-        'error' => $conn->error
+        'message' => 'Database operation failed'
     ), JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -119,8 +122,7 @@ $success = $stmt->execute();
 if (!$success) {
     echo json_encode(array(
         'success' => false,
-        'message' => '新增失敗',
-        'error' => $stmt->error
+        'message' => '新增失敗'
     ), JSON_UNESCAPED_UNICODE);
     exit;
 }

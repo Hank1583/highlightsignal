@@ -3,16 +3,11 @@
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Headers: Content-Type');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-  http_response_code(204);
-  exit;
-}
 
 require_once __DIR__ . '/../../db_connect.php';
+require_once __DIR__ . '/../../legacy_auth.php';
+
+$pagespeedHistoryIdentity = hs_require_service_identity($conn);
 
 function history_success($data = [])
 {
@@ -57,7 +52,7 @@ if (!is_array($input)) {
   history_fail('Invalid JSON body', 'INVALID_JSON');
 }
 
-$userId = (int)($input['user_id'] ?? 0);
+$userId = hs_require_service_member($conn, $input['user_id'] ?? 0);
 $siteId = (int)($input['site_id'] ?? 0);
 $strategy = ($input['strategy'] ?? '') === 'desktop' ? 'desktop' : 'mobile';
 $limit = max(1, min(30, (int)($input['limit'] ?? 10)));

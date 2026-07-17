@@ -96,5 +96,12 @@ final class ServiceRequestAuthenticator
         $expiresAt = $timestamp + Environment::integer('SERVICE_AUTH_TTL_SECONDS', 60);
         $statement->bind_param('sii', $nonce, $timestamp, $expiresAt);
         $statement->execute();
+
+        $cleanupPercent = Environment::integer('SERVICE_AUTH_NONCE_CLEANUP_PERCENT', 1);
+        if ($cleanupPercent > 0 && mt_rand(1, 100) <= min(100, $cleanupPercent)) {
+            $this->database->query(
+                'DELETE FROM service_request_nonces WHERE expires_at < NOW() LIMIT 1000'
+            );
+        }
     }
 }

@@ -43,9 +43,9 @@ DEFERRED    已決定延後，不計入目前版本
 |---|---|
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
-| Active task | `V08-02` BLOCKED_EXTERNAL_ROTATION |
-| Next task | 在保留 V08-02 credential／PHP lint 風險紀錄下，執行 `V08-03` endpoint authentication coverage |
-| Blocking issue | HTTP containment、DB bootstrap、Cloudflare matching secret、signed/replay 與 Workspace authorization 均已驗證；owner 接受共用 MySQL 不輪替、保留 service secret 與 URL-only PHP 驗證風險；全檔 PHP 7.0 lint 未驗證 |
+| Active task | `V08-03` IMPLEMENTED_LOCAL_PENDING_TARGET_UPLOAD |
+| Next task | 完成 V08-04～V08-06 本機 hardening 後，單次上傳 PHP 並執行 legacy signed/negative URL tests |
+| Blocking issue | V08-02 的共用 MySQL 不輪替、保留 service secret 與 URL-only PHP lint 風險持續保留；V08-03 legacy auth 修正尚未上傳智邦 target |
 | Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：

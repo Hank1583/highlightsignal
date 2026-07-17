@@ -1,13 +1,15 @@
 <?php
-ini_set('display_errors', 1);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
 error_reporting(E_ALL);
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . "/../../db_connect.php";
+require_once __DIR__ . "/../../legacy_auth.php";
 
 $input = json_decode(file_get_contents("php://input"), true);
 
-$user_id   = intval($input['user_id'] ?? 0);
+$user_id   = hs_require_service_member($conn, $input['user_id'] ?? 0);
 $site_url  = trim($input['site_url'] ?? '');
 $site_name = trim($input['site_name'] ?? '');
 

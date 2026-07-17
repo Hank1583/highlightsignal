@@ -4,6 +4,13 @@ Options -Indexes
   RewriteEngine On
   RewriteRule ^api/v1(?:/.*)?$ public/index.php [QSA,L]
   RewriteRule ^(?:src|config|workers)/ - [F,L,NC]
+  RewriteRule ^(?:api_helpers|auth|db_connect|legacy_auth)\.php$ - [F,L,NC]
+  RewriteRule ^ga/api_client\.php$ - [F,L,NC]
+  RewriteRule ^ga/ownership\.php$ - [F,L,NC]
+  RewriteRule ^ga/report/config\.php$ - [F,L,NC]
+  RewriteRule ^pagespeed_config\.php$ - [F,L,NC]
+  RewriteRule ^si/(?:common|generate_common|save_common)\.php$ - [F,L,NC]
+  RewriteRule ^ga/report/(?:check_phpspreadsheet|delete_csv|report_excel|report_runner)\.php$ - [F,L,NC]
 </IfModule>
 
 <FilesMatch "^(\.env|\.env\..*|composer\.(json|lock)|README.*|db_connect\.php)$">

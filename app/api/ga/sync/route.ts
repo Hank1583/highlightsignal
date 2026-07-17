@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/serverSession";
 import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 import { highlightPhpApiUrl } from "@/lib/config";
+import { signedPhpFetch } from "@/lib/signedPhpFetch";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession();
@@ -23,7 +24,20 @@ export async function GET(req: NextRequest) {
       start,
       end,
     });
-    return NextResponse.redirect(highlightPhpApiUrl(`ga/data_sync.php?${params.toString()}`));
+    const targetUrl = highlightPhpApiUrl(`ga/data_sync.php?${params.toString()}`);
+    const response = await signedPhpFetch(
+      targetUrl,
+      { method: "GET", cache: "no-store" },
+      { memberId: workspace.legacyOwnerMemberId, workspaceId: workspace.workspaceId }
+    );
+
+    return new NextResponse(response.body, {
+      status: response.status,
+      headers: {
+        "Content-Type": response.headers.get("content-type") || "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    });
   } catch {
     return NextResponse.json({ ok: false, message: "Workspace access denied" }, { status: 403 });
   }
