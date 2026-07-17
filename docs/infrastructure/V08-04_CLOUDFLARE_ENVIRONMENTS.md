@@ -28,7 +28,10 @@ Next.js 16.2.7 deprecates `middleware.ts` in favor of `proxy.ts`, but Proxy alwa
 Owner policy as of 2026-07-17: no Cloudflare environment is promoted or
 deployed until the complete V1.2 roadmap has passed acceptance. The following
 runbook is retained for that future gate; through V1.1 only build, startup
-analysis, and explicit `--dry-run` validation are allowed.
+analysis, explicit `--dry-run` validation, and GitHub work-branch pushes are
+allowed. Do not push or merge to `main`: the external Cloudflare Git integration
+uses `main` as an automatic deployment trigger. Roadmap work remains on
+`codex/*` branches until the V1.2 production gate is approved.
 
 1. Build and pass the release gate without production credentials.
 2. Provision the four secret names separately for the target named environment.

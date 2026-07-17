@@ -100,9 +100,11 @@ tests，不執行全 payload `php -l`。已呼叫 route 的結果有效，但未
 PHP 7.0 相容性維持未驗證風險，不標記為 PASS。
 
 2026-07-17 owner deployment decision：Cloudflare 正式部署延後至 V1.2 全部功能、
-migration、CI、驗收與風險清單完成後。V0.8～V1.1 期間只允許本機 build、
-OpenNext build、Wrangler `--dry-run`、GitHub CI 與既有智邦 pre-launch target 的
-URL 驗證；不得因單一 milestone 通過而執行 Cloudflare production deployment。
+migration、CI、驗收與風險清單完成後。V0.8～V1.1 期間可以 push GitHub 工作
+branch、執行本機／OpenNext build、Wrangler `--dry-run`、GitHub CI 與既有智邦
+pre-launch target URL 驗證；禁止 push／merge 到 `main`，因 `main` 由外部
+Cloudflare Git integration 自動部署。所有後續 roadmap 工作使用 `codex/*` branch，
+不得因單一 milestone 通過而更新 `main` 或觸發 Cloudflare production deployment。
 
 2026-07-17 URL-only DB verification：signed Workspace context、GA integration、
 Dashboard workflow read 均為 HTTP 200；測試 context `v08-db-smoke-20260717`
