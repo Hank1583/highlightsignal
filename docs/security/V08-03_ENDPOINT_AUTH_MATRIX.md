@@ -1,6 +1,6 @@
 # V08-03 Endpoint Authentication Matrix
 
-Status: IMPLEMENTED_LOCAL_PENDING_TARGET_UPLOAD
+Status: VERIFY_PENDING_AUTH_HOTFIX_UPLOAD
 Date: 2026-07-17
 Target: 智邦 `/highlightsignal/v2` (pre-launch integration)
 
@@ -104,10 +104,13 @@ Already proven on the current target for `/api/v1`:
 - non-member Workspace 403;
 - signed mutation/readback 200.
 
-Pending after the single planned PHP upload:
+First post-upload URL verification passed signed GA/SI/SEO legacy reads,
+unsigned and tampered request rejection, Workspace isolation, and workflow
+mutation/readback. It found a cache-mediated legacy replay gap and OAuth state
+validation ordering gap; both are fixed locally in `538ab3e`.
 
-- legacy unsigned, forged member, body/path tamper and replay tests;
+Pending after uploading the two-file hotfix:
+
+- legacy nonce replay rejection with `no-store` response headers;
 - OAuth invalid/expired state tests without provider exchange;
-- internal/CLI path 403/404 verification;
-- signed legacy GA/SI/SEO positive reads;
 - report and sync BFF smoke tests where provider data is available.

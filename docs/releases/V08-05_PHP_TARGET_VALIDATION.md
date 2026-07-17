@@ -1,6 +1,6 @@
 # V08-05 PHP target validation
 
-Status: VERIFY_PENDING_V08_03_UPLOAD
+Status: VERIFY_PENDING_AUTH_HOTFIX_UPLOAD
 Date: 2026-07-17
 Target: 智邦 `/highlightsignal/v2` with PHP 7.0 and MySQL 5.6
 
@@ -40,3 +40,16 @@ Never upload `.env`, `backend/private/`, credential JSON, private keys, storage,
 - one reversible read/mutation/readback flow
 
 PHP 7.0 is unsupported upstream and cannot be upgraded on this host. The owner accepts this hosting constraint for the pre-launch period. Moving to a supported PHP runtime remains a release risk, and no claim of full PHP 7.0 syntax compatibility is made without payload-wide lint or post-upload route coverage.
+
+## First post-upload result
+
+The 2026-07-17 URL run passed health, private/internal denial, unsigned/invalid/expired authentication rejection, `/api/v1` nonce replay rejection, Workspace membership isolation, signed unknown-route and invalid-JSON contracts, signed Workspace/context, workflow mutation/readback, signed GA/SI/SEO legacy reads, member/path tamper rejection, and legacy OPTIONS denial.
+
+The authorized test mutation used context `v08-upload-smoke-20260717` and returned a matching task on readback.
+
+Two gaps were found and fixed locally in commit `538ab3e`:
+
+- a repeated signed legacy GET returned a cacheable 200 instead of reaching the nonce claim; all legacy authenticated responses now emit `no-store`, private, zero-age headers;
+- OAuth invalid state returned 500 because provider configuration was checked before state; callback state is now authenticated before optional provider configuration.
+
+Upload only `legacy_auth.php` and `ga/oauth_callback.php` from `538ab3e`, then repeat legacy replay plus OAuth invalid/expired-state tests. The host environment currently has no configured `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, or `GOOGLE_OAUTH_REDIRECT_URI`; a real provider exchange remains unavailable until those names are provisioned, without committing their values.

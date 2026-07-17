@@ -43,9 +43,9 @@ DEFERRED    已決定延後，不計入目前版本
 |---|---|
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
-| Active task | `V08-03`／`V08-05` VERIFY_PENDING_TARGET_UPLOAD；`V08-06` 等待首次 hosted CI |
-| Next task | 單次上傳 PHP overlay，執行 legacy signed/negative URL tests，再決定是否 push/deploy |
-| Blocking issue | V08-03 legacy auth 尚未上傳智邦；V08-05 payload-wide PHP lint 依 owner 決策不執行；V08-06 hosted CI 需 push 後才有證據 |
+| Active task | `V08-03`／`V08-05` VERIFY_PENDING_AUTH_HOTFIX_UPLOAD；`V08-06` 等待首次 hosted CI |
+| Next task | 上傳 `538ab3e` 的兩個 PHP hotfix，重測 replay/OAuth state，再決定是否 push/deploy |
+| Blocking issue | post-upload 驗證發現的 legacy cache replay 與 OAuth state ordering 修正尚未上傳；payload-wide PHP lint 依 owner 決策不執行；V08-06 hosted CI 需 push 後才有證據 |
 | Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：
@@ -168,6 +168,7 @@ V0.8 Release Safety
   - 統一 JSON error contract，限制 CORS。
   - 驗收：偽造 identity header、錯誤簽章、過期簽章全部被拒絕。
   - 本機 implementation commit：`ad6f46d`；等待單次上傳智邦後執行 legacy endpoint URL 驗證。
+  - 第一輪 upload 驗證通過主要 signed/negative flows；cache replay 與 OAuth state ordering hotfix 為 `538ab3e`，等待兩檔重傳驗證。
 
 - [x] `V08-04` 建立 staging／production Cloudflare 設定
   - Wrangler 定義 staging 與 production environment。
@@ -182,6 +183,7 @@ V0.8 Release Safety
   - 確認 PHP 7.0 相容性，列出升級 PHP 8.1+ 的決策與期限。
   - 驗收：lint、health、auth、DB connection smoke test 全部通過。
   - 依 owner 決策改用現有 pre-launch target URL-only 驗證；upload manifest 已建立，等待 V08-03 overlay 上傳後完成新版驗證。
+  - 第一輪新版 URL 驗證完成並建立測試 context `v08-upload-smoke-20260717`；等待 `538ab3e` 兩檔 hotfix 上傳後收尾。
 
 - [ ] `V08-06` 最小 CI Quality Gate
   - 自動執行 ESLint、TypeScript、Next build、OpenNext build、Wrangler dry-run。
