@@ -1,6 +1,6 @@
 # V08-05 PHP target validation
 
-Status: VERIFY_PENDING_REPORT_MAILER_UPLOAD
+Status: DONE
 Date: 2026-07-17
 Target: 智邦 `/highlightsignal/v2` with PHP 7.0 and MySQL 5.6
 
@@ -59,3 +59,7 @@ The two-file retest proved `no-store` and OAuth invalid/expired state handling, 
 After uploading the authenticator hotfix and correcting the `/v2` OAuth redirect, the reusable test passed all seven checks: first legacy read 200, `no-store` present, same nonce with a different query 401, exact replay 401, invalid OAuth state 400, expired OAuth state 400, and OAuth start redirect 302 with the exact current callback.
 
 Final endpoint-family negative checks returned 401 for sync and OAuth start. Direct report mailer returned an empty 200 because 智邦 resolves `SCRIPT_FILENAME` through a path that did not equal the file's `realpath()`, so the script incorrectly treated the request as an include. No email path executed. Commit `ad38e96` makes every non-CLI invocation enter signed authentication while preserving CLI include/direct behavior. Upload `ga/report/report_mailer.php` and verify an unsigned request returns 401; do not perform a positive mail send during this security gate.
+
+The first report hotfix exposed that the host has no `ga/report/config.php`: dependency loading produced a PHP warning/fatal before authentication and returned HTML 200. Commit `581b6a7` moved authentication before optional report dependencies, disabled public PHP error display, and made dependency failures generic. After upload, a unique no-cache unsigned request returned HTTP 401, 87-byte JSON, before report generation or email delivery. V08-05 is complete under the owner's URL-only verification decision.
+
+Accepted residual risks are PHP 7.0 end-of-life, no payload-wide PHP lint, the retained legacy OAuth client secret, and unavailable positive report delivery until a new server-only `ga/report/config.php` is provisioned. None is recorded as a successful verification.

@@ -43,9 +43,9 @@ DEFERRED    已決定延後，不計入目前版本
 |---|---|
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
-| Active task | `V08-03`／`V08-05` VERIFY_PENDING_REPORT_MAILER_UPLOAD；`V08-06` 等待首次 hosted CI |
-| Next task | 上傳 `ad38e96` report mailer，確認 unsigned 401 後決定是否 push/deploy |
-| Blocking issue | 智邦 `SCRIPT_FILENAME` 路徑差異使 direct report request 誤判為 include，修正尚未上傳；payload-wide PHP lint 依 owner 決策不執行 |
+| Active task | `V08-06` VERIFY；等待首次 hosted CI |
+| Next task | 建立非 main release-safety branch 並 push，讓 GitHub Actions 執行 V08-06；CI 通過前不部署 |
+| Blocking issue | hosted CI 需非 main branch push 才會執行；PHP 7.0、URL-only lint、舊 OAuth secret、缺少 report config 為已接受／列管風險 |
 | Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：
@@ -162,7 +162,7 @@ V0.8 Release Safety
   - 驗收：secret scan、部署環境變數清單、輪替紀錄。
   - 本機 containment 已完成：Git/history/public payload/clean Worker bundle scan 通過；legacy mirror exposure 已列管。狀態維持 `BLOCKED_EXTERNAL_ROTATION`，證據見 `docs/security/V08-02_SECRET_CONTAINMENT_REPORT.md`。
 
-- [ ] `V08-03` Next.js → PHP Service Authentication 完整覆蓋
+- [x] `V08-03` Next.js → PHP Service Authentication 完整覆蓋
   - 所有正式 PHP business endpoints 驗證簽章、timestamp、nonce／重放條件。
   - PHP 不信任外部 `X-Member-*` 權限宣告。
   - 統一 JSON error contract，限制 CORS。
@@ -170,7 +170,8 @@ V0.8 Release Safety
   - 本機 implementation commit：`ad6f46d`；等待單次上傳智邦後執行 legacy endpoint URL 驗證。
   - 第一輪 upload 驗證通過主要 signed/negative flows；cache replay 與 OAuth state ordering hotfix 為 `538ab3e`，等待兩檔重傳驗證。
   - `538ab3e` 上傳後確認 cache header 與 OAuth state PASS；legacy replay 根因為 non-strict MySQLi 未檢查 duplicate INSERT false，已補 authenticator hotfix。
-  - authenticator 與 `/v2` OAuth redirect 最終七項 PASS；sync/OAuth unsigned 401。report mailer direct-request detection hotfix `ad38e96` 等待上傳。
+  - authenticator 與 `/v2` OAuth redirect 最終七項 PASS；sync/OAuth unsigned 401。report mailer direct-request detection 由 `ad38e96`／`581b6a7` 完成。
+  - `581b6a7` 上傳後 report unsigned unique/no-cache request 回 401 JSON，確認在 dependency 與 mail side effect 前拒絕；V08-03 DONE。
 
 - [x] `V08-04` 建立 staging／production Cloudflare 設定
   - Wrangler 定義 staging 與 production environment。
@@ -179,13 +180,14 @@ V0.8 Release Safety
   - 驗收：兩個環境均能 dry-run，設定不互相污染。
   - 本機環境隔離、self binding、secret names、observability、startup 與 OpenNext build 已完成；staging／production named-environment dry-run 均 PASS。因 OpenNext 尚不支援 Node Proxy，暫時保留可部署的 Edge middleware。
 
-- [ ] `V08-05` PHP staging 驗證
+- [x] `V08-05` PHP staging 驗證
   - 在實際 PHP runtime 執行所有 PHP syntax lint。
   - 驗證 Apache rewrite、`.htaccess`、environment loader 與 `/api/v1/health`。
   - 確認 PHP 7.0 相容性，列出升級 PHP 8.1+ 的決策與期限。
   - 驗收：lint、health、auth、DB connection smoke test 全部通過。
   - 依 owner 決策改用現有 pre-launch target URL-only 驗證；upload manifest 已建立，等待 V08-03 overlay 上傳後完成新版驗證。
   - 第一輪新版 URL 驗證完成並建立測試 context `v08-upload-smoke-20260717`；等待 `538ab3e` 兩檔 hotfix 上傳後收尾。
+  - V08-03～V08-05 完整 URL matrix、DB mutation/readback 與 hosting-specific hotfix 均已驗證；依 owner URL-only 決策 DONE，未執行 payload-wide PHP lint。
 
 - [ ] `V08-06` 最小 CI Quality Gate
   - 自動執行 ESLint、TypeScript、Next build、OpenNext build、Wrangler dry-run。

@@ -1,6 +1,6 @@
 # V08-03 Endpoint Authentication Matrix
 
-Status: VERIFY_PENDING_REPORT_MAILER_UPLOAD
+Status: DONE
 Date: 2026-07-17
 Target: 智邦 `/highlightsignal/v2` (pre-launch integration)
 
@@ -109,8 +109,8 @@ unsigned and tampered request rejection, Workspace isolation, and workflow
 mutation/readback. It found a cache-mediated legacy replay gap and OAuth state
 validation ordering gap; both are fixed locally in `538ab3e`.
 
-Nonce and OAuth hotfix verification is complete. Pending final upload:
-
-- upload `ad38e96` report mailer direct-request detection;
-- prove unsigned report request is rejected before mail generation;
-- positive report delivery remains intentionally excluded to avoid external email side effects.
+Nonce, OAuth, and report authentication hotfix verification is complete. The
+final unique no-cache unsigned report request returned 401 JSON before loading
+report dependencies or entering mail delivery. A positive report send remains
+intentionally excluded to avoid an external email side effect and because the
+server-only report configuration is not provisioned.
