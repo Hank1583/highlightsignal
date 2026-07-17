@@ -44,8 +44,8 @@ DEFERRED    已決定延後，不計入目前版本
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
 | Active task | `V08-02` BLOCKED_EXTERNAL_ROTATION |
-| Next task | 保留現有 `SERVICE_AUTH_SECRET`，在 Cloudflare provision matching `PHP_SERVICE_AUTH_SECRET` 並執行 signed smoke test |
-| Blocking issue | 智邦 HTTP containment 與 DB bootstrap 已驗證；owner 因 10+ 系統共用帳號接受 MySQL 不輪替風險並保留 service secret；仍缺 Cloudflare matching secret、signed request 與 Workspace authorization 證據 |
+| Next task | 取得智邦 PHP 7.0 全 payload lint 證據；保留 credential risk blocker 後再決定是否進入 `V08-03` |
+| Blocking issue | HTTP containment、DB bootstrap、Cloudflare matching secret、signed/replay 與 Workspace authorization 均已驗證；owner 因 10+ 系統共用帳號接受 MySQL 不輪替風險並保留 service secret；尚缺 PHP 7.0 全檔 lint |
 | Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：

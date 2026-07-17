@@ -222,10 +222,20 @@ switch.
 | Git current/history high-confidence scan | PASS, zero committed hits |
 | JWT missing-secret dynamic check | PASS, rejected |
 | PHP fail-closed static checks | PASS |
-| Wrangler secret-name inventory | PASS, values not requested or returned |
+| Wrangler secret-name inventory | PASS; `PHP_SERVICE_AUTH_SECRET` is now present, values not requested or returned |
 | Post-change Wrangler dry-run | NOT RUN; execution environment rejected external bundle transfer |
 | Current health endpoint | PASS, HTTP 200 |
 | Current unsigned workspace request | PASS, HTTP 401 |
 | Current internal bootstrap and environment source paths | PASS, HTTP 403 |
 | Unknown authenticated route without a signature | HTTP 401 at authentication boundary; route-level 404 requires a valid signed request |
-| PHP lint and in-place signed smoke test | BLOCKED; no local PHP runtime and no provider/hosting cutover evidence yet |
+| Valid signed workspace request | PASS, HTTP 200 |
+| Replayed nonce | PASS, HTTP 401 |
+| Invalid signature | PASS, HTTP 401 |
+| Expired signature | PASS, HTTP 401 |
+| Non-member Workspace | PASS, HTTP 403 |
+| PHP target-compatible full-file lint | BLOCKED; no local PHP runtime or host lint evidence yet |
+
+The signed smoke used member `1` and workspace header `0`, matching the
+pre-launch BFF workspace-list flow. It may create the default test Workspace
+for that member when none exists, which is within the owner's authorized test
+data scope. No response body or secret value was printed or recorded.
