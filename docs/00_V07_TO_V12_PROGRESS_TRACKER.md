@@ -43,9 +43,9 @@ DEFERRED    已決定延後，不計入目前版本
 |---|---|
 | Last sync | 2026-07-17 |
 | Active milestone | V0.8 — Release Safety |
-| Active task | `V08-03` IMPLEMENTED_LOCAL_PENDING_TARGET_UPLOAD |
-| Next task | 完成 V08-04～V08-06 本機 hardening 後，單次上傳 PHP 並執行 legacy signed/negative URL tests |
-| Blocking issue | V08-02 的共用 MySQL 不輪替、保留 service secret 與 URL-only PHP lint 風險持續保留；V08-03 legacy auth 修正尚未上傳智邦 target |
+| Active task | `V08-04`～`V08-06` VERIFY；本機 hardening 已實作 |
+| Next task | 核准 Wrangler named-environment dry-run；單次上傳 PHP 並執行 legacy signed/negative URL tests |
+| Blocking issue | Cloudflare dry-run 因可能傳送 bundle 等待明確核准；V08-03 legacy auth 尚未上傳智邦；V08-05 payload-wide PHP lint 依 owner 決策不執行 |
 | Last verified commit | `95a7167`（V08-02 local secret containment；外部輪替仍 blocked） |
 
 已備妥的獨立執行任務包：
@@ -167,23 +167,27 @@ V0.8 Release Safety
   - PHP 不信任外部 `X-Member-*` 權限宣告。
   - 統一 JSON error contract，限制 CORS。
   - 驗收：偽造 identity header、錯誤簽章、過期簽章全部被拒絕。
+  - 本機 implementation commit：`ad6f46d`；等待單次上傳智邦後執行 legacy endpoint URL 驗證。
 
 - [ ] `V08-04` 建立 staging／production Cloudflare 設定
   - Wrangler 定義 staging 與 production environment。
   - 分離網址、API base、secret、Worker name 與觀測設定。
   - 處理 `middleware` → `proxy` deprecation。
   - 驗收：兩個環境均能 dry-run，設定不互相污染。
+  - 本機環境隔離、self binding、secret names、observability、startup 與 OpenNext build 已完成；named-environment dry-run 等待外部 bundle-transfer 核准。因 OpenNext 尚不支援 Node Proxy，暫時保留可部署的 Edge middleware。
 
 - [ ] `V08-05` PHP staging 驗證
   - 在實際 PHP runtime 執行所有 PHP syntax lint。
   - 驗證 Apache rewrite、`.htaccess`、environment loader 與 `/api/v1/health`。
   - 確認 PHP 7.0 相容性，列出升級 PHP 8.1+ 的決策與期限。
   - 驗收：lint、health、auth、DB connection smoke test 全部通過。
+  - 依 owner 決策改用現有 pre-launch target URL-only 驗證；upload manifest 已建立，等待 V08-03 overlay 上傳後完成新版驗證。
 
 - [ ] `V08-06` 最小 CI Quality Gate
   - 自動執行 ESLint、TypeScript、Next build、OpenNext build、Wrangler dry-run。
   - 失敗時阻止發布。
   - 驗收：CI 成功與故意失敗案例各一份紀錄。
+  - GitHub Actions、Release boundary、typecheck、build、OpenNext、Wrangler checks 已建立；等待 push 後首次 hosted CI evidence。
 
 ## V0.8 出口條件
 

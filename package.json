@@ -6,7 +6,9 @@
     "dev": "cross-env NEXT_DISABLE_TURBOPACK=1 node --env-file=backend/private/frontend.env node_modules/next/dist/bin/next dev",
     "build": "next build --webpack",
     "build:cf": "opennextjs-cloudflare build",
+    "typecheck": "tsc --noEmit --pretty false",
     "types:cf": "wrangler types --env production --no-include-runtime --check",
+    "verify:release-boundary": "node scripts/verify-release-boundary.mjs",
     "preview:cf": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "dry-run:cf:staging": "wrangler deploy --env staging --dry-run",
     "dry-run:cf:production": "wrangler deploy --env production --dry-run",
@@ -15,6 +17,7 @@
     "start": "next start",
     "lint": "eslint"
   },
+  "packageManager": "npm@10.9.2",
   "dependencies": {
     "@opennextjs/cloudflare": "^1.19.11",
     "framer-motion": "^12.23.24",

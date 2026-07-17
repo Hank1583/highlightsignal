@@ -1,0 +1,62 @@
+name: Release gate
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Reject secrets and generated artifacts
+        run: npm run verify:release-boundary
+
+      - name: Prove Release boundary rejects forbidden fixtures
+        run: node scripts/verify-release-boundary.mjs --self-test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Next production build
+        run: npm run build
+
+      - name: OpenNext Cloudflare build
+        run: npm run build:cf
+
+      - name: Check generated Worker binding types
+        run: npm run types:cf
+
+      - name: Check Worker startup
+        run: npx wrangler check startup --env production
+
+      - name: Wrangler staging dry-run
+        run: npx wrangler deploy --env staging --dry-run --outdir .wrangler/dry-run-staging
+
+      - name: Wrangler production dry-run
+        run: npx wrangler deploy --env production --dry-run --outdir .wrangler/dry-run-production

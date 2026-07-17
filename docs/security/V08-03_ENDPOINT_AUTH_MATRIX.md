@@ -1,7 +1,7 @@
 # V08-03 Endpoint Authentication Matrix
 
-Status: IMPLEMENTED_LOCAL_PENDING_TARGET_UPLOAD  
-Date: 2026-07-17  
+Status: IMPLEMENTED_LOCAL_PENDING_TARGET_UPLOAD
+Date: 2026-07-17
 Target: 智邦 `/highlightsignal/v2` (pre-launch integration)
 
 ## Authentication classes
