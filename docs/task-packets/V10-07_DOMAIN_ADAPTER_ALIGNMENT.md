@@ -1,6 +1,6 @@
 # Task Packet — V10-07 GA/SEO/AEO/GEO Adapter Alignment
 
-Status: PLANNED
+Status: VERIFY（GA/SEO 兩條 vertical slice 程式完成，disposable Docker 排練通過；AEO/GEO 為明確 deferred gap，見下方說明；真實主機驗證待 owner 執行）
 Milestone: V1.0 Decision Intelligence Core
 Dependency: `V10-01`～`V10-06`、`V09-08`
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`（第 6 節）
@@ -48,10 +48,59 @@ Authority: `docs/00_Technical_Specification_Alignment_v1.2.md`（Integration、D
 
 # Acceptance criteria
 
-- [ ] GA、SEO 兩條 vertical slice 通過。
-- [ ] 四個來源共用正式 domain contracts。
-- [ ] Legacy compatibility 與 tenant isolation 未退化。
-- [ ] Adapter 不跨越 Human Review。
+- [x] GA、SEO 兩條 vertical slice 通過 — SEO 沿用 V10-01 既有
+      `SeoTechnicalIssueDetector`／`si/seo/summary.php` 路徑；GA 新增
+      `GaTrafficAnomalyDetector`（流量下滑規則），接到 `ga/data_sync.php`
+      每日 `ga_daily_summary` 寫入後，與既有 `SignalService`/`EvidenceService`
+      共用同一組 `signals`/`evidence_items` schema。
+- [x] 四個來源共用正式 domain contracts — `SignalService::applyDetectionPlan()`
+      抽出為共用收斂點，SEO 與 GA 的 detector 都只需回傳同一形狀的
+      `{to_upsert, to_resolve}` plan；Dashboard（V10-06 `TodaySignals.tsx`）
+      不分來源，GA 偵測到的 Signal 自動出現在同一決策流程，無需前端改動。
+      AEO/GEO 為明確 deferred gap（見下方 Verification evidence）。
+- [x] Legacy compatibility 與 tenant isolation 未退化 —
+      `ga/data_sync.php` 的 HTML streaming console 輸出格式完全未變；新增邏輯
+      使用既有已解析的 `$workspace_id`（`hs_resolve_member_workspace_id()`），
+      非 memberId fallback；disposable rehearsal 證明跨 Workspace 對同一
+      `connection_id` 數值各自獨立。
+- [x] Adapter 不跨越 Human Review — `GaTrafficAnomalyDetector`／
+      `SignalService`／`EvidenceService` 皆不建立 Recommendation 或 Decision，
+      只寫入 Signal/Evidence（與既有 SEO 路徑相同分工）。
+
+# Verification evidence
+
+**GA/SEO vertical slice**：`backend/api/src/Signal/Detector/GaTrafficAnomalyDetector.php`
+（新檔，無資料庫存取，trailing baseline drop 規則：≥50% 高、≥25% 中、基準天數
+<3 或基準平均 sessions<10 一律不判定）；`SignalService.php` 抽出
+`applyDetectionPlan()` 供 SEO／GA 共用；`EvidenceService.php` 新增
+`recordGaTrafficAnomalyEvidence()`；`ga/data_sync.php` 每日摘要寫入後接上
+偵測，try/catch 保護不影響原本 sync console 輸出。
+
+2026-07-21 disposable Docker `mysql:5.6` + local PHP 7.4 CLI 排練（22 項斷言
+全數通過）：detector 單元行為（基準天數不足／基準過小不判定、5% 不算異常會
+resolve、30%/60% 對應 medium/high、dedup key 跨數值穩定）；完整 Signal
+生命週期（建立→bump→resolve→reopen，全程只有 1 筆 row）；跨 Workspace 對同一
+`connection_id` 各自獨立；Evidence 記錄與連結、相同數值 dedup、不同數值產生新
+snapshot；**回歸測試**：抽出 `applyDetectionPlan()` 後 SEO 偵測仍正確建立/
+解決；`data_sync.php` 實際使用的 baseline SQL 語法與計算結果正確。詳見
+`backend/sql/VERIFICATION_RUNBOOK.md` 第 12 節。
+
+**AEO/GEO：明確 deferred gap，非假裝完成**。讀完
+`backend/api/si/generate_common.php` 確認：AEO/GEO 輸出是每次請求即時計算的
+文案／內容建議草稿（衍生自 SEO 關鍵字與問題資料），沒有任何 scan-history
+等價的持久化表可比對前後差異，也沒有像 SEO 問題（site+type+url）或 GA
+sessions 那樣穩定可比對的「問題身分」。在沒有歷史快照表的情況下硬做 diff/
+dedup，等同於臆造一個「AI 能見度分數變化多少算異常」的門檻，且比 SEO 當初的
+情況更沒有根據。**Owner／後續任務**：需要先設計並建立 AEO/GEO 的
+scan-history 等價持久化層（依 site+tab 儲存每次 score/item list），才能誠實地
+寫偵測規則；新增資料表屬於 schema 決策，非本任務授權範圍（`不引入第二套
+Signal/Evidence schema`）。建議另開任務包（例如 `V10-07b` 或併入後續 V1.1
+任務）追蹤此缺口；在此之前，AEO/GEO 頁面維持任務包允許的現狀——Evidence/
+raw-data drill-down，沒有 Signal-backed 決策流程。
+
+**尚未執行（需要正式主機）**：對真實 Google Analytics property 執行真實多日
+sync，確認偵測邏輯在真實（非合成）數值下正確觸發；真實跨 Workspace HTTP
+負向測試；與先前每個 V10 任務相同的缺口類別。
 
 # Execution-chat prompt
 

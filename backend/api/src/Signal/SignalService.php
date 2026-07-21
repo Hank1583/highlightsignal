@@ -7,6 +7,7 @@ namespace HighlightSignal\Signal;
 use HighlightSignal\Auth\ServiceIdentity;
 use HighlightSignal\Http\NotFoundException;
 use HighlightSignal\Http\ValidationException;
+use HighlightSignal\Signal\Detector\GaTrafficAnomalyDetector;
 use HighlightSignal\Signal\Detector\SeoTechnicalIssueDetector;
 use HighlightSignal\Workspace\WorkspacePermissions;
 use mysqli;
@@ -103,8 +104,49 @@ final class SignalService
         array $previousIssues
     ): array {
         $detector = new SeoTechnicalIssueDetector();
-        $plan = $detector->diff($siteId, $currentIssues, $previousIssues);
+        return $this->applyDetectionPlan($workspaceId, $detector->diff($siteId, $currentIssues, $previousIssues));
+    }
 
+    /**
+     * V10-07: first GA detection rule, proving the same Signal pipeline
+     * generalizes beyond SEO -- called from `ga/data_sync.php` right after a
+     * day's `ga_daily_summary` row is written, mirroring exactly how
+     * `runSeoTechnicalIssueDetection()` is called from si/seo/summary.php.
+     *
+     * @return array{created: int, reopened: int, bumped: int, resolved: int}
+     */
+    public function runGaTrafficAnomalyDetection(
+        int $workspaceId,
+        int $connectionId,
+        string $accountName,
+        float $currentSessions,
+        float $baselineAvgSessions,
+        int $baselineDayCount
+    ): array {
+        $detector = new GaTrafficAnomalyDetector();
+        return $this->applyDetectionPlan($workspaceId, $detector->diff(
+            $connectionId,
+            $accountName,
+            $currentSessions,
+            $baselineAvgSessions,
+            $baselineDayCount
+        ));
+    }
+
+    /**
+     * V10-07: the single convergence point every detector's plan runs
+     * through -- previously duplicated inline inside
+     * runSeoTechnicalIssueDetection() alone. Any future source (AEO/GEO, or
+     * a second GA rule) only needs to produce a
+     * `{to_upsert, to_resolve}` plan in this same shape; the actual
+     * dedup/upsert/reopen/resolve/audit mechanics are never re-implemented
+     * per source.
+     *
+     * @param array{to_upsert: array<int, array<string, mixed>>, to_resolve: array<int, string>} $plan
+     * @return array{created: int, reopened: int, bumped: int, resolved: int}
+     */
+    private function applyDetectionPlan(int $workspaceId, array $plan): array
+    {
         $stats = array('created' => 0, 'reopened' => 0, 'bumped' => 0, 'resolved' => 0);
 
         foreach ($plan['to_upsert'] as $item) {
@@ -158,7 +200,7 @@ final class SignalService
                     null,
                     'Signal Auto-Resolved',
                     (string) $existing['public_id'],
-                    array('source' => 'seo')
+                    array('source' => (string) ($existing['source'] ?? 'unknown'))
                 );
             }
         }

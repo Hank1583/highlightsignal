@@ -645,3 +645,334 @@ change, and a real end-to-end HTTP verification (create a real SEO task from
 a real detected issue and confirm the Recommendation shown in the Dashboard
 reflects backend-derived content, not what was typed/rendered on the
 frontend).
+
+## 10. V10-05 — Human Review & Decision Formalization (expands the already-live `decisions` table)
+
+`migrations/028_decision_formalization_expand.sql` ALTERs the already-live
+`decisions` table (migrations/011) — real rows may already exist from live
+Dashboard usage. Run `backend/sql/preflight_v10_05_decision_inventory.sql`
+first (confirms the current shape, existing row count, and that no existing
+`decision` value falls outside the current 2-value ENUM), then paste
+`migrations/028`, then run
+`backend/sql/postflight_v10_05_decision_invariants.sql`.
+
+**What changed**: `decision` widens from `ENUM('accepted','skipped')` to the
+spec's full 6-value outcome set (`accepted`/`skipped`/`rejected`/`deferred`/
+`modified`/`needs_more_evidence`) — the two original values keep meaning
+exactly what they always did. Three columns are added:
+`recommendation_revision` (which `recommendations.revision`, migrations/027,
+this Decision was actually made against), `expected_outcome` (distinct from
+`note`, the decision's reason), and an opt-in `idempotency_key` with a
+`UNIQUE(workspace_id, idempotency_key)` key (MySQL treats every `NULL` as
+distinct, so a caller that doesn't supply one is unaffected).
+
+**Append-only, unchanged**: `decisions` was already append-only before this
+task — `WorkflowRepository::recordDecision()` has always `INSERT`ed a new
+row rather than `UPDATE`ing, and `latestDecision()` reads the most recent by
+`ORDER BY id DESC`. This migration only widens what a single row can express;
+it does not touch that discipline.
+
+**`recommendations.status` mapping**: that column is a different, smaller
+ENUM (`pending`/`accepted`/`skipped`/`archived`, migrations/011) than the new
+6-value `decisions.decision` — it was always a simplified lifecycle flag, not
+a mirror of the decision outcome. `recordDecision()` maps explicitly:
+`accepted`/`modified` → `accepted` (still moving forward), `skipped`/
+`rejected` → `skipped` (declined), `deferred`/`needs_more_evidence` →
+`pending` (still open).
+
+**Idempotency**: an opt-in `idempotency_key` short-circuits
+`recordDecision()` — if a caller supplies one and it already matches a prior
+Decision in the same workspace, the existing row is returned unchanged and
+no second row (or second `recommendations.status` write) happens. A caller
+that omits it gets no such guard (matching pre-existing behavior exactly).
+
+**Transaction boundary**: `WorkflowService::mutate()` wraps the entire
+action (Recommendation save + `recordDecision()`'s two writes + the
+action-specific work + the audit log insert) in one `begin_transaction()`/
+`commit()`/`rollback()` — a validation failure partway through (e.g. an
+invalid `decision` value) rolls back everything, including the Recommendation
+row that had already been saved earlier in the same call. There is no path
+that leaves a Recommendation update committed with no matching Decision, or
+vice versa.
+
+**2026-07-21 rehearsal evidence (disposable local Docker `mysql:5.6` + local
+PHP 7.4 CLI harness with `mysqli` — NOT this host's real data)**: built the
+minimal schema chain migrations `010`/`011`/`012`/`024`/`025`/`026`/`027`
+(the tables `decisions`/`recommendations` actually depend on; the
+legacy-table-dependent Workspace-backfill migrations `014`-`022` aren't
+needed for this Decision-only rehearsal), ran preflight, applied `028`, ran
+postflight — all clean. Exercised `WorkflowService::mutate()`/`get()` and
+`WorkflowRepository::recordDecision()` directly (45 assertions, all passed):
+
+* All 6 outcome values (`accepted`, `modified`, `skipped`, `rejected`,
+  `deferred`, `needs_more_evidence`) each recorded a Decision with the right
+  `decision`/`note`/`expected_outcome`/`recommendation_revision`, and each
+  correctly mapped to its expected `recommendations.status`.
+* An invalid decision value (`bogus_outcome`) threw `ValidationException`,
+  and confirmed the whole-`mutate()` transaction rollback left **zero**
+  half-created Recommendation rows for that `context_key` — not a
+  Recommendation with no matching Decision.
+* Idempotency: submitting the same `idempotency_key` twice, the second time
+  with a deliberately different decision (`rejected` instead of `accepted`)
+  and reason, produced only 1 Decision row total; the second call returned
+  the ORIGINAL decision unchanged, and `recommendations.status` matched the
+  first decision, not the ignored retry.
+* `create_task`'s implicit accept still records correctly and now stamps
+  `recommendation_revision`.
+* Append-only history: recording a second Decision on the same Recommendation
+  created a genuinely new row (2 total, not an UPDATE), and `latestDecision()`
+  correctly returned the newest one while the older row remained untouched.
+* Cross-workspace isolation: Workspace 2's identity saw no Recommendation for
+  Workspace 1's `context_key`, and had zero Decision rows throughout.
+* Role-based fail-closed: `WorkspacePermissions::requirePermission()` denied
+  `viewer` role for `workflow.mutate` (`AuthorizationException`) and allowed
+  `member` role, confirming the existing permission matrix (unchanged by this
+  task) still gates the mutate path this Decision logic sits behind.
+* Transaction atomicity of `recordDecision()` itself: began a transaction,
+  called it directly, confirmed the `recommendations.status` change was
+  visible mid-transaction, then rolled back and confirmed BOTH of its writes
+  (the Decision insert and the status update) were undone together — proving
+  the repository method has no hidden autocommit or second connection that
+  would defeat the caller's transaction.
+* Re-running `028` a second time failed with `Duplicate column name
+  'recommendation_revision'` (expected MySQL 5.6 behavior — DDL is not
+  re-runnable, matching every prior migration's history).
+
+**Not yet executed (needs the real host)**: applying `migrations/028`,
+uploading `backend/api/src/Dashboard/WorkflowRepository.php`/
+`WorkflowService.php`/`public/index.php`, and a real end-to-end HTTP
+verification of all 6 outcomes plus a genuine cross-workspace negative test
+(needs a second real test account/Workspace, same gap as every prior task).
+
+## 11. V10-06 — Decision-first Dashboard (no new migration; `WorkflowService.php` + frontend only)
+
+This task wires the Decision-first Dashboard (spec section 11: Signal →
+Evidence → Explanation → Business Impact → Recommendation → Human Review →
+Decision, one screen, one flow) against the real V10-01~05 APIs — no new
+table, no new migration. Two small additions to
+`backend/api/src/Dashboard/WorkflowService.php` were needed to make that
+possible without re-implementing any detector/recommendation/permission rule
+in the frontend:
+
+* **`resolveSignalContext()` gained a `signal_context.signal_id` direct
+  path**, alongside the original SEO-specific `{site_id, issue_type, url}` →
+  `dedup_key` path (migrations/027). The Dashboard already has the real
+  Signal row in hand (from `GET .../signals`) for ANY source domain — it
+  doesn't know or need to know a detector's dedup-key formula just to
+  formalize a Recommendation from a Signal it's already displaying. Still
+  scoped to the caller's own workspace via the existing
+  `SignalRepository::findForWorkspace()` — no new cross-workspace lookup.
+* **A new `refresh_recommendation` mutate() action.** The Recommendation
+  save/formalization step (`saveFormalizedRecommendation()`/
+  `saveRecommendation()`) already runs unconditionally at the top of
+  `mutate()` for every action — this new action adds no logic of its own, it
+  only lets the Dashboard trigger that existing formalization pass WITHOUT
+  implicitly recording a Decision or creating a Task, unlike `save_decision`/
+  `create_task` which always did one of those as a side effect. This is what
+  lets a human review the real, backend-computed
+  title/priority/confidence/expected_impact/suggested_action/reason BEFORE
+  deciding, instead of deciding blind or the frontend guessing at that
+  content itself.
+
+**Frontend**: `components/dashboard/TodaySignals.tsx` (new) — lists open
+Signals for the current Workspace, and per-Signal shows Evidence (citation
+count/ids), Explanation, Business Impact, the formalized Recommendation, and
+a Human Review panel offering all 6 V10-05 outcomes with a reason/expected-
+outcome form and a per-Signal idempotency key (regenerated after each
+successful submit) to guard double-submit. Wired into
+`components/dashboard/DashboardWorkspace.tsx` as a new top-level section.
+Workspace switching: an `AbortController` created per Workspace change
+cancels any in-flight Signal-list request, and all per-Signal
+analysis/workflow/review state is cleared in the same effect — a late
+response from a just-abandoned Workspace cannot render into the new one.
+GA/SEO/AEO/GEO's own pages are untouched and remain the Evidence/raw-data
+drill-down, per the task packet's explicit constraint.
+
+**Scope cut, documented rather than silently dropped**: the review panel
+shows only the LATEST Decision (`workflow.decision`, from
+`WorkflowRepository::latestDecision()`), not the full append-only Decision
+history for a Recommendation — V10-05 didn't add a "list all decisions for
+this recommendation" endpoint, and adding one was judged out of this task's
+scope (not required by V10-06's mandatory verification list, which only
+requires refresh/resubmit-safety and single-flow review, not a history
+viewer). The history rows themselves are fully persisted and correct
+(proven in V10-05's rehearsal); only a UI to browse them doesn't exist yet.
+
+**2026-07-21 rehearsal evidence (disposable local Docker `mysql:5.6` + local
+PHP 7.4 CLI harness with `mysqli` — NOT this host's real data)**: built the
+same minimal schema chain as V10-05 (`010`/`011`/`012`/`024`-`028`), seeded 2
+workspaces each with one Signal, and exercised `WorkflowService::mutate()`
+directly (12 assertions, all passed):
+
+* `signal_context.signal_id` resolved the real Signal and formalized the
+  Recommendation from it — title/priority came from the Signal
+  (`generator_type='backend_rule'`), NOT the deliberately fake
+  frontend-supplied title/description passed alongside it.
+* `refresh_recommendation` created the formalized Recommendation but
+  correctly left both `decision` and `task` `null` — no implicit side effect.
+* A repeat `refresh_recommendation` call was a no-op on `revision`
+  (idempotent, same as V10-04's formalization idempotency).
+* Workspace 2's identity supplying Workspace 1's real `signal_id` correctly
+  fell back to the legacy path (Workspace 2's own frontend content used,
+  `generator_type` stayed `frontend_legacy`) — no cross-workspace Signal
+  content leaked, same non-leaking-fallback principle V10-04 established for
+  the `{site_id, issue_type, url}` path.
+* Workspace 2 resolving its OWN `signal_id` (a different tenant, independent
+  happy path, not just the forgery-rejection case) worked correctly with its
+  own Signal's title/severity-mapped priority.
+* `save_decision` immediately after a `refresh_recommendation` on the same
+  `context_key` correctly recorded a real Decision while keeping the
+  Signal-derived title — confirms the two actions compose correctly in
+  sequence, `refresh_recommendation` doesn't leave the Recommendation row in
+  a state `save_decision` can't build on.
+
+**Static verification**: `php -l` passed on the modified
+`WorkflowService.php`; `npm run typecheck`, `npm run lint`, and `npm run
+build` all passed with the new `TodaySignals.tsx` component and its
+`DashboardWorkspace.tsx` integration.
+
+**Not yet executed (needs the real host / real login)**: a real interactive
+click-through of the Decision-first flow in a browser. This project's
+frontend dev server proxies to the real PHP backend over the network rather
+than running PHP locally, so a genuine login requires live backend
+credentials (`PHP_SERVICE_AUTH_SECRET` etc.) this environment does not have
+and should not be given — attempting a real end-to-end session would mean
+either exercising the real pre-launch host or fabricating credentials
+neither of which is appropriate here. The static checks above (typecheck/
+lint/build) plus the disposable-Docker behavioral rehearsal are the
+practical substitute, same category of gap as every prior V10 task's "needs
+the real host" note — Workspace A/B rapid-switch and refresh/resubmit-safety
+behavior described above are implemented per the mandatory verification
+list, but not yet clicked through live.
+
+## 12. V10-07 — GA/SEO/AEO/GEO Adapter Alignment (no new migration)
+
+No new table, no ALTER — this task converges the existing Signal detection
+boundary so a second source (GA) can feed the same `signals`/`evidence_items`
+tables SEO already writes to, and documents why AEO/GEO cannot yet do the
+same honestly rather than faking it.
+
+**Convergence (`backend/api/src/Signal/SignalService.php`)**: the
+upsert/reopen/bump/resolve/audit loop that used to live only inside
+`runSeoTechnicalIssueDetection()` is extracted into a private
+`applyDetectionPlan(workspaceId, plan)`, which both
+`runSeoTechnicalIssueDetection()` and the new
+`runGaTrafficAnomalyDetection()` call through. Any future source only needs
+to produce a `{to_upsert, to_resolve}` plan in this same shape — the actual
+dedup/upsert/reopen/resolve/audit mechanics are never re-implemented per
+source. `SignalRepository::findByDedupKey()` gained a `source` column in its
+SELECT (additive, harmless) so the generalized audit-log call can report the
+correct source instead of a hardcoded `'seo'`.
+
+**GA vertical slice**: `backend/api/src/Signal/Detector/GaTrafficAnomalyDetector.php`
+(new) — stateless, same discipline as `SeoTechnicalIssueDetector`: no
+database access, caller supplies the day's observed sessions and a trailing
+baseline it already computed. Emits at most one plan item per GA connection
+(traffic-drop only — a real, narrower first GA rule, not a placeholder; more
+GA anomaly types are later, additive tasks, the same way SEO started with
+only technical issues in V10-01). Dedup key is stable per connection
+(`ga_traffic_drop:{connectionId}`), so an ongoing anomaly bumps
+`occurrence_count` instead of creating duplicate rows, and recovery
+auto-resolves it (same reopen/resolve semantics V10-01 established).
+Severity: ≥50% trailing-average drop → `high`, ≥25% → `medium`, below that →
+resolved/not-anomalous. Guards against noise: fewer than 3 baseline days, or
+a trailing average below 10 sessions, is a deliberate no-op (neither upsert
+nor resolve) rather than a guess — same fail-closed spirit as V10-03's
+`insufficient_evidence` state.
+
+`backend/api/src/Evidence/EvidenceService.php` gained
+`recordGaTrafficAnomalyEvidence()`, the GA counterpart to
+`recordSeoTechnicalIssueEvidence()` — re-runs the same stateless detector
+diff (cheap, no DB access, same decoupling rationale as the SEO method),
+records an Evidence snapshot, and links it to the Signal. Unlike SEO's
+`stableFact()` (which excludes scan-run metadata), the session numbers
+themselves ARE the fact for GA — each day's traffic reading is a genuinely
+new observation, so content-hash dedup only collapses byte-identical repeat
+observations, not different days with different real numbers.
+
+**Call site (`backend/api/ga/data_sync.php`)**: right after each day's
+`ga_daily_summary` row is written, a new block computes a trailing 7-day
+session average for that connection (`SELECT AVG(sessions), COUNT(*) FROM
+(SELECT sessions ... ORDER BY date DESC LIMIT 7) recent_days`, excluding the
+day just written) and calls both new methods, wrapped in try/catch exactly
+like `si/seo/summary.php`'s existing Signal/Evidence call site — a detection
+failure is logged and never breaks the sync console's own output. Uses the
+already-resolved `$workspace_id` (via `hs_resolve_member_workspace_id()`,
+established in V09-08), never a raw `member_id` boundary. No change to
+`ga_daily_summary`'s own INSERT/response shape — fully backward compatible
+with the existing sync console.
+
+**Dashboard trace closes for free**: because `components/dashboard/
+TodaySignals.tsx` (V10-06) already renders whatever Signals exist for the
+workspace regardless of source, a GA-detected traffic anomaly shows up in
+the exact same Decision-first flow as an SEO issue with zero frontend
+change — this is the actual payoff of the shared Signal/Evidence/
+Recommendation contract this task was asked to converge toward.
+
+**AEO/GEO: deliberate, documented deferred gap, not a silent skip.** Read
+`backend/api/si/generate_common.php` (`si_build_aeo_payload()`/
+`si_build_geo_payload()`) in full before assuming otherwise: AEO/GEO output
+is entirely derived, per-request copywriting/content-suggestion drafts
+(FAQ questions, short-answer snippets, citation-page suggestions) computed
+fresh from the SEO keyword/issue data already available — there is no
+persisted AEO/GEO scan-history table, no stored prior-run snapshot to diff
+against, and no stable "problem identity" comparable to a SEO issue
+(site+type+url) or a GA connection's session count. Building a Signal
+detector here would mean inventing a threshold for "how much did the
+AI-visibility score change" with no historical data to validate it against
+— exactly the unsupported-formula risk `SeoTechnicalIssueDetector`'s own
+design notes warned against, and worse here since there is not even a
+snapshot table to diff. **Deferred, not attempted**: a real AEO/GEO detector
+needs a persisted scan-history-equivalent table (score + item list per
+run, keyed by site+tab) before any diff/dedup logic can be written
+honestly. That table does not exist today and creating one is out of this
+task's scope (`不引入第二套 Signal/Evidence schema` — a scan-history table
+is schema, not an Adapter). **Owner/next task**: track as a new task packet
+(e.g. `V10-07b` or folded into a later V1.1 task) whose first step is
+designing that persistence layer; until then, AEO/GEO pages remain
+exactly what the task packet allows them to stay — Evidence/raw-data
+drill-down with no Signal-backed Decision flow.
+
+**2026-07-21 rehearsal evidence (disposable local Docker `mysql:5.6` + local
+PHP 7.4 CLI harness with `mysqli` — NOT this host's real data)**: built a
+minimal schema (`workspaces` + `signals`/`evidence_items`/
+`signal_evidence_links` from migrations `010`/`024`/`025`, plus a synthetic
+`ga_daily_summary` stand-in matching `data_sync.php`'s inferred columns,
+same caveat as every `ga_*`/`seo_*` legacy-table rehearsal before this one),
+seeded a 5-day session history for one GA connection, and ran 22 assertions
+directly against `GaTrafficAnomalyDetector`/`SignalService`/`EvidenceService`
+(all passed):
+
+* Detector unit behavior: insufficient baseline days (<3) and too-small
+  baseline (<10 sessions) both correctly no-op; a small (5%) drop resolves
+  rather than flags; a 30% drop is `medium`, a 60% drop is `high`; the
+  dedup key stays identical across different session numbers for the same
+  connection (stable per-connection identity, not per-observation).
+* Full Signal lifecycle via `runGaTrafficAnomalyDetection()`: first
+  detection creates (`source='ga'`), a still-anomalous re-run bumps
+  `occurrence_count` (not a 2nd row), recovery resolves it, recurrence
+  reopens it — exactly ONE Signal row existed throughout the whole
+  4-call lifecycle.
+* Cross-workspace isolation: Workspace 2 running detection for the SAME
+  numeric `connection_id` got its own independent Signal; Workspace 1's
+  Signal was completely unaffected.
+* `recordGaTrafficAnomalyEvidence()`: recorded and linked a snapshot;
+  identical numbers the next day deduped (refreshed, not a new row);
+  genuinely different numbers produced a real new row — exactly 2 distinct
+  Evidence snapshots existed after 3 calls, both linked to the same Signal.
+* **Regression check**: `runSeoTechnicalIssueDetection()` still creates and
+  resolves Signals correctly after the `applyDetectionPlan()` extraction —
+  the refactor did not change SEO's proven V10-01 behavior.
+* The exact derived-table `AVG`/`COUNT` baseline SQL now used in
+  `data_sync.php` was run directly against the seeded 5-day history and
+  returned the correct `day_count=5`/`avg_sessions=100.0`.
+
+**Static verification**: `php -l` passed on every new/modified PHP file
+(`GaTrafficAnomalyDetector.php`, `SignalService.php`, `SignalRepository.php`,
+`EvidenceService.php`, `ga/data_sync.php`).
+
+**Not yet executed (needs the real host)**: a real GA sync run against a
+live Google Analytics property with genuine multi-day history, to confirm
+the detection fires correctly against real (not synthetic) session numbers,
+plus a real cross-workspace HTTP negative test — same category of gap as
+every prior V10 task.

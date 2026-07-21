@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import OnboardingChecklist from "@/components/dashboard/OnboardingChecklist";
+import TodaySignals from "@/components/dashboard/TodaySignals";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 
 type Lens = "overview" | "traffic" | "priority" | "seo" | "visibility";
@@ -634,6 +635,8 @@ export default function DashboardWorkspace({ ga, seo, rangeLabel, updatedAt }: P
         progress={progress}
         outcomeStatus={workflow?.outcome?.status}
       />
+
+      <TodaySignals />
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 md:flex-row md:items-start md:justify-between">

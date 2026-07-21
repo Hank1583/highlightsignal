@@ -205,6 +205,56 @@ while ($row = $res->fetch_assoc()) {
             }
 
             echo "<span class='ok'>OK</span>\n";
+
+            /***********************************************
+             * V10-07: GA traffic-anomaly Signal detection.
+             * Mirrors si/seo/summary.php's Signal/Evidence call site --
+             * wrapped in try/catch, never breaks the sync console output.
+             * Baseline is the trailing 7-day average of THIS connection's
+             * own prior days (excludes $theDate itself).
+             ***********************************************/
+            try {
+                $baselineStmt = $conn->prepare(
+                    'SELECT AVG(sessions) AS avg_sessions, COUNT(*) AS day_count FROM (
+                        SELECT sessions FROM ga_daily_summary
+                        WHERE connection_id = ? AND date < ?
+                        ORDER BY date DESC LIMIT 7
+                    ) recent_days'
+                );
+                $baselineStmt->bind_param('is', $connection_id, $theDate);
+                $baselineStmt->execute();
+                $baselineRow = $baselineStmt->get_result()->fetch_assoc();
+                $baselineAvgSessions = $baselineRow && $baselineRow['avg_sessions'] !== null ? (float) $baselineRow['avg_sessions'] : 0.0;
+                $baselineDayCount = $baselineRow ? (int) $baselineRow['day_count'] : 0;
+
+                $gaSignalRepository = new \HighlightSignal\Signal\SignalRepository($conn);
+                $gaSignalService = new \HighlightSignal\Signal\SignalService($conn, $gaSignalRepository);
+                $gaSignalService->runGaTrafficAnomalyDetection(
+                    $workspace_id,
+                    (int) $connection_id,
+                    $account_name,
+                    (float) $sessions,
+                    $baselineAvgSessions,
+                    $baselineDayCount
+                );
+
+                $gaEvidenceRepository = new \HighlightSignal\Evidence\EvidenceRepository($conn);
+                $gaEvidenceService = new \HighlightSignal\Evidence\EvidenceService($gaEvidenceRepository, $gaSignalRepository);
+                $gaEvidenceService->recordGaTrafficAnomalyEvidence(
+                    $workspace_id,
+                    (int) $connection_id,
+                    $account_name,
+                    (float) $sessions,
+                    $baselineAvgSessions,
+                    $baselineDayCount,
+                    $theDate . ' 00:00:00'
+                );
+            } catch (\Throwable $gaSignalError) {
+                // Signal/Evidence detection must never break the GA sync
+                // console itself -- a missed detection is recoverable on the
+                // next sync, same principle as the SEO integration.
+                error_log('GA Signal detection failed: ' . $gaSignalError->getMessage());
+            }
         } else {
             echo "<span class='err'>No Data</span>\n";
         }

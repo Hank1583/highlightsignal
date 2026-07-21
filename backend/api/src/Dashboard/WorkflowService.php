@@ -182,6 +182,16 @@ final class WorkflowService
                     $current,
                     $this->compare($baseline, $current)
                 );
+            } elseif ($action === 'refresh_recommendation') {
+                // V10-06: no additional side effect -- the Recommendation
+                // save/formalization above (saveFormalizedRecommendation()/
+                // saveRecommendation()) already ran for every action, this
+                // one included. Exists purely so the Decision-first
+                // Dashboard can formalize/refresh a Signal-backed
+                // Recommendation's real content (title/priority/confidence/
+                // expected_impact/suggested_action/reason) for human review
+                // BEFORE any decision is made, unlike save_decision/
+                // create_task which always implicitly recorded one.
             } else {
                 throw new ValidationException('Unsupported workflow action.');
             }
@@ -204,6 +214,20 @@ final class WorkflowService
         $context = isset($input['signal_context']) && is_array($input['signal_context']) ? $input['signal_context'] : null;
         if ($context === null) {
             return null;
+        }
+
+        // V10-06: direct-by-id path, alongside the original SEO-specific
+        // (site_id, issue_type, url) -> dedup_key path below. The
+        // Decision-first Dashboard already has the real Signal row in hand
+        // (from GET .../signals) for ANY source domain (SEO today, GA/AEO/GEO
+        // once V10-07 wires their detectors) -- it doesn't know or need to
+        // know a detector's dedup-key formula to formalize a Recommendation
+        // from a Signal it's already looking at. Still scoped to the
+        // caller's own workspace via findForWorkspace(), same as the
+        // dedup-key path -- no cross-workspace lookup introduced.
+        $signalId = isset($context['signal_id']) ? (int) $context['signal_id'] : 0;
+        if ($signalId > 0) {
+            return $this->signalRepository->findForWorkspace($workspaceId, $signalId);
         }
 
         $siteId = isset($context['site_id']) ? (int) $context['site_id'] : 0;

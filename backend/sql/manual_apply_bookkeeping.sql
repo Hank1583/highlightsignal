@@ -270,7 +270,26 @@ ON DUPLICATE KEY UPDATE version = version;
 -- unconditionally.
 
 -- ============================================================
+-- Step 14 (V10-05): FIRST run
+-- backend/sql/preflight_v10_05_decision_inventory.sql (confirms the CURRENT
+-- shape of the already-live `decisions` table and that no existing row's
+-- value falls outside the current 2-value ENUM). Only then open
+-- backend/sql/migrations/028_decision_formalization_expand.sql, paste and
+-- run it. Nullable/opt-in expand only -- 'accepted'/'skipped' keep meaning
+-- exactly what they always did; every existing Decision row keeps working.
+-- ============================================================
+
+INSERT INTO schema_migrations (version, name, checksum, duration_ms, executor) VALUES
+  ('028', '028_decision_formalization_expand.sql', '1912c64fd18d273108ba8d9c9f0ab924489220a3592fb89847c0ce26b0b7c9f4', 0, 'REPLACE_WITH_YOUR_NAME')
+ON DUPLICATE KEY UPDATE version = version;
+
+-- Afterward run backend/sql/postflight_v10_05_decision_invariants.sql.
+-- Do NOT upload backend/api/src/Dashboard/WorkflowRepository.php/
+-- WorkflowService.php/public/index.php changes before this migration is
+-- applied -- recordDecision() now writes the new columns unconditionally.
+
+-- ============================================================
 -- After all of the above: run `SELECT * FROM schema_migrations ORDER BY version;`
--- and confirm all 15 rows (010-016, 018-019, 021-022, 024-027) are present
+-- and confirm all 16 rows (010-016, 018-019, 021-022, 024-028) are present
 -- with the checksums shown here.
 -- ============================================================

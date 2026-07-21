@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace HighlightSignal\Evidence;
 
+use HighlightSignal\Signal\Detector\GaTrafficAnomalyDetector;
 use HighlightSignal\Signal\Detector\SeoTechnicalIssueDetector;
 use HighlightSignal\Signal\SignalRepository;
 
@@ -108,6 +109,91 @@ final class EvidenceService
                 // the same plan -- but Evidence must never assume a Signal
                 // exists; recording the fact is still valid even if linking
                 // isn't possible this run.
+                $stats['unmatched']++;
+                continue;
+            }
+
+            if ($this->repository->linkSignalEvidence(
+                $workspaceId,
+                (int) $signal['id'],
+                (int) $result['row']['id'],
+                'primary'
+            )) {
+                $stats['linked']++;
+            }
+        }
+
+        return $stats;
+    }
+
+    /**
+     * V10-07: GA counterpart to recordSeoTechnicalIssueEvidence() -- re-runs
+     * the same stateless GaTrafficAnomalyDetector diff already used by
+     * SignalService::runGaTrafficAnomalyDetection() (cheap, no DB access),
+     * same decoupling rationale as the SEO method above. Emits at most one
+     * Evidence row per call, since the detector emits at most one plan item
+     * per connection.
+     *
+     * Unlike SEO's stableFact() (which deliberately excludes scan-run
+     * metadata), the session numbers ARE the fact here -- each day's traffic
+     * reading is a genuinely new observation, not scan-run noise to exclude.
+     * A day where the numbers are byte-identical to the last capture (rare
+     * for real traffic) correctly dedupes to the same row via content_hash;
+     * any real change in the numbers is a new fact and gets a new row.
+     *
+     * @return array{recorded: int, refreshed: int, linked: int, unmatched: int}
+     */
+    public function recordGaTrafficAnomalyEvidence(
+        int $workspaceId,
+        int $connectionId,
+        string $accountName,
+        float $currentSessions,
+        float $baselineAvgSessions,
+        int $baselineDayCount,
+        string $capturedAt
+    ): array {
+        $detector = new GaTrafficAnomalyDetector();
+        $plan = $detector->diff($connectionId, $accountName, $currentSessions, $baselineAvgSessions, $baselineDayCount);
+
+        $stats = array('recorded' => 0, 'refreshed' => 0, 'linked' => 0, 'unmatched' => 0);
+
+        foreach ($plan['to_upsert'] as $item) {
+            $fact = array(
+                'connection_id' => $connectionId,
+                'signal_type' => $item['signal_type'],
+                'severity' => $item['severity'],
+                'title' => $item['title'],
+                'summary' => $item['summary'],
+                'current_sessions' => $item['current_sessions'],
+                'baseline_avg_sessions' => $item['baseline_avg_sessions'],
+                'drop_percent' => $item['drop_percent'],
+            );
+            $contentHash = hash('sha256', json_encode($fact, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            $evidenceDedupKey = hash('sha256', $item['dedup_key'] . ':' . $contentHash);
+            $payloadJson = json_encode($fact, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            $result = $this->repository->upsertByDedupKey(
+                $workspaceId,
+                $evidenceDedupKey,
+                'ga_traffic_anomaly_snapshot',
+                $item['source'],
+                $item['source_ref_type'],
+                $connectionId,
+                $item['title'],
+                $item['summary'],
+                $payloadJson,
+                $contentHash,
+                $capturedAt
+            );
+
+            if ($result['was_new']) {
+                $stats['recorded']++;
+            } else {
+                $stats['refreshed']++;
+            }
+
+            $signal = $this->signalRepository->findByDedupKey($workspaceId, $item['dedup_key']);
+            if (!is_array($signal)) {
                 $stats['unmatched']++;
                 continue;
             }

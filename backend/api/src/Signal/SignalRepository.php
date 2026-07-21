@@ -24,7 +24,7 @@ final class SignalRepository
     public function findByDedupKey(int $workspaceId, string $dedupKey)
     {
         $statement = $this->database->prepare(
-            'SELECT id, public_id, status, occurrence_count FROM signals
+            'SELECT id, public_id, status, occurrence_count, source FROM signals
              WHERE workspace_id = ? AND dedup_key = ? LIMIT 1'
         );
         $statement->bind_param('is', $workspaceId, $dedupKey);

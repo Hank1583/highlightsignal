@@ -45,9 +45,9 @@ DEFERRED    已決定延後，不計入目前版本
 |---|---|
 | Last sync | 2026-07-21 |
 | Active milestone | V0.9 — Workspace Foundation（收尾）／V1.0 — Decision Intelligence Core（啟動） |
-| Active task | `V09-01`～`V09-07` DONE；`V09-08`／`V10-01`～`V10-04` 程式＋SQL＋disposable rehearsal 皆完成，狀態 VERIFY（真實主機套用／PHP／前端上傳待 owner 一次執行）；owner 下達「V10-03→V10-08 GOGOGO」持續執行指令；`V08-02` 仍 BLOCKED_EXTERNAL_ROTATION，owner 已接受風險 |
-| Next task | `V09-08`／`V10-01`～`V10-04` 五個 VERIFY 任務待 owner 於真實主機依序執行對應 migration（021-022、024、025、026、027）＋上傳 PHP／前端＋跨 Workspace HTTP 測試後可轉 DONE；繼續依序執行 `V10-05`（Human Review／Decision formalization）；role 邊界、全新會員 provisioning 與多 Workspace 切換的殘留驗證仍需具備對應測試資料後補測。**2026-07-21 owner 決定**：現有正式站已知有未指明錯誤，不插隊修復，留到 V1.2 全部完成後換版一次解決（見 `V12-08` 條目）；同時換版把 PHP 路徑從 `/highlightsignal/v2` 改為同網域拿掉 `v2` 的較短路徑，牽動 GA OAuth redirect URI 需重新註冊。 |
-| Blocking issue | 舊 OAuth secret 與其他 V08-02 credentials 仍列為可能曝露；PHP 7.0／URL-only lint 為接受風險；report delivery config 未配置；`V09-08`／`V10-01`～`V10-04` 程式已完成但尚未套用至真實主機——六張 GA reporting tables 仍為 `member_id`-only ownership，`signals`／`evidence_items`／`signal_evidence_links`／`signal_analyses` 表尚未存在於正式環境，`recommendations` 表尚未加上 V10-04 新欄位 |
+| Active task | `V09-01`～`V09-07` DONE；`V09-08`／`V10-01`～`V10-08` 全數程式＋SQL＋disposable rehearsal 完成，狀態 VERIFY（真實主機套用／PHP／前端上傳／真實資料執行待 owner 一次執行）；owner 下達「V10-03→V10-08 GOGOGO」持續執行指令已跑完，V1.0 Decision Intelligence Core 里程碑本身維持 VERIFY（不轉 DONE，見 `V10-08` 驗收報告的唯一缺口說明）；`V08-02` 仍 BLOCKED_EXTERNAL_ROTATION，owner 已接受風險 |
+| Next task | `V09-08`／`V10-01`～`V10-08` 全部 VERIFY 任務待 owner 於真實主機依序執行對應 migration（021-022、024、025、026、027、028）＋上傳 PHP／前端＋跨 Workspace HTTP 測試＋真實瀏覽器登入互動驗證＋至少一條真實資料 golden path 後，V1.0 才可轉 DONE；role 邊界、全新會員 provisioning 與多 Workspace 切換的殘留驗證仍需具備對應測試資料後補測；AEO/GEO Signal 偵測缺 scan-history 持久化層的背景任務已建立建議，待挑選執行；下一個里程碑是 V1.1 Execution & Operations（`V11-01` 起）。**2026-07-21 owner 決定**：現有正式站已知有未指明錯誤，不插隊修復，留到 V1.2 全部完成後換版一次解決（見 `V12-08` 條目）；同時換版把 PHP 路徑從 `/highlightsignal/v2` 改為同網域拿掉 `v2` 的較短路徑，牽動 GA OAuth redirect URI 需重新註冊。 |
+| Blocking issue | 舊 OAuth secret 與其他 V08-02 credentials 仍列為可能曝露；PHP 7.0／URL-only lint 為接受風險；report delivery config 未配置；`V09-08`／`V10-01`～`V10-08` 程式已完成但尚未套用至真實主機——六張 GA reporting tables 仍為 `member_id`-only ownership，`signals`／`evidence_items`／`signal_evidence_links`／`signal_analyses` 表尚未存在於正式環境，`recommendations` 表尚未加上 V10-04 新欄位，`decisions` 表尚未加上 V10-05 新欄位，`V10-06` 的 Decision-first Dashboard UI 與 `V10-07` 的 GA 偵測皆尚未對真實資料/真實登入驗證過——這是 V1.0 milestone 維持 VERIFY 而非 DONE 的唯一原因 |
 | Last verified commit | `0811a25`；GitHub Actions run `29568711140` 全部 PASS（V0.8 為止；V0.9／V1.0 工作尚未 commit） |
 
 已備妥的獨立執行任務包：
@@ -68,12 +68,12 @@ DEFERRED    已決定延後，不計入目前版本
 * `V09-08`：`docs/task-packets/V09-08_GA_REPORTING_WORKSPACE_OWNERSHIP.md`（VERIFY，2026-07-21，GA reporting tables/endpoints 的 Workspace ownership 程式＋SQL 完成，disposable rehearsal 驗證通過，真實主機套用待 owner 執行）
 * `V10-01`：`docs/task-packets/V10-01_SIGNAL_PERSISTENCE.md`（VERIFY，2026-07-21，`signals` 表＋Signal Repository/Service/Controller＋SEO 技術問題偵測規則程式＋SQL 完成，disposable rehearsal 驗證去重/resolve/reopen/權限邏輯通過，真實主機套用待 owner 執行）
 * `V10-02`：`docs/task-packets/V10-02_EVIDENCE_TRACEABILITY.md`（VERIFY，2026-07-21，`evidence_items`/`signal_evidence_links` 表＋Repository/Service/Controller＋SEO Evidence 記錄程式＋SQL 完成，disposable rehearsal 驗證 dedup/immutability/traceability 通過，真實主機套用待 owner 執行）
-* `V10-03`：`docs/task-packets/V10-03_EXPLANATION_BUSINESS_IMPACT.md`（PLANNED）
-* `V10-04`：`docs/task-packets/V10-04_RECOMMENDATION_FORMALIZATION.md`（PLANNED）
-* `V10-05`：`docs/task-packets/V10-05_HUMAN_REVIEW_DECISION.md`（PLANNED）
-* `V10-06`：`docs/task-packets/V10-06_DECISION_FIRST_DASHBOARD.md`（PLANNED）
-* `V10-07`：`docs/task-packets/V10-07_DOMAIN_ADAPTER_ALIGNMENT.md`（PLANNED）
-* `V10-08`：`docs/task-packets/V10-08_CORE_E2E_ACCEPTANCE.md`（PLANNED）
+* `V10-03`：`docs/task-packets/V10-03_EXPLANATION_BUSINESS_IMPACT.md`（VERIFY，2026-07-21，`signal_analyses` 表＋rule-based generator 程式＋SQL 完成，disposable rehearsal 驗證通過，真實主機套用待 owner 執行）
+* `V10-04`：`docs/task-packets/V10-04_RECOMMENDATION_FORMALIZATION.md`（VERIFY，2026-07-21，`recommendations` 擴充＋signal-backed 內容解析程式＋SQL 完成，disposable rehearsal 驗證通過，真實主機套用待 owner 執行）
+* `V10-05`：`docs/task-packets/V10-05_HUMAN_REVIEW_DECISION.md`（VERIFY，2026-07-21，`decisions` 擴充為六種 outcome＋idempotency/recommendation_revision 程式＋SQL 完成，disposable rehearsal 驗證通過，真實主機套用待 owner 執行）
+* `V10-06`：`docs/task-packets/V10-06_DECISION_FIRST_DASHBOARD.md`（VERIFY，2026-07-21，Decision-first Dashboard UI＋`WorkflowService` 小幅擴充（signal_id 直查／refresh_recommendation）程式完成，disposable rehearsal＋typecheck/lint/build 通過，真實瀏覽器登入互動驗證待 owner 於有憑證環境執行）
+* `V10-07`：`docs/task-packets/V10-07_DOMAIN_ADAPTER_ALIGNMENT.md`（VERIFY，2026-07-21，GA/SEO 兩條 vertical slice 程式完成，disposable rehearsal 通過；AEO/GEO 為明確 deferred gap（缺 scan-history 等價持久化層），真實主機驗證待 owner 執行）
+* `V10-08`：`docs/task-packets/V10-08_CORE_E2E_ACCEPTANCE.md`（VERIFY，2026-07-21，全鏈路 disposable rehearsal 通過（33/33），發現並修復一個真實跨來源缺陷（`RuleBasedAnalysisGenerator` 的 impact_area 曾寫死為 seo）；真實主機／真實資料執行仍待 owner，V1.0 milestone 因此不轉 DONE，見 `docs/releases/V10-08_CORE_E2E_ACCEPTANCE_REPORT.md`）
 * `V11-01`：`docs/task-packets/V11-01_ACTION_MANUAL_TASK_LIFECYCLE.md`（PLANNED）
 * `V11-02`：`docs/task-packets/V11-02_MYSQL_QUEUE_WORKER_RELIABILITY.md`（PLANNED）
 * `V11-03`：`docs/task-packets/V11-03_EXECUTION_RESULT.md`（PLANNED）
@@ -938,30 +938,30 @@ V0.8 Release Safety
   - 持久化、優先度、來源、模型／規則版本、狀態與版本更新。→ `backend/sql/migrations/027_recommendation_formalization_expand.sql`（既有 `recommendations` 表 nullable expand，非破壞性）；`seo:{siteId}:{issueType}` context_key 正式化為 Signal-backed（`generator_type=backend_rule`），其餘 5 種 onboarding-style context_key 完全保留 legacy 行為。
   - 驗收：Recommendation 可重現、可審查、不可因重新整理消失。→ disposable rehearsal 證明：前端偽造內容被忽略、idempotent 重跑不遞增 revision、跨 Workspace 偽造 site_id 安全 fallback 不外洩資料、Signal resolved 後自動 archive（過程中發現並修好一個真實 bug：archive 狀態曾被同一 request 內的 recordDecision() 蓋掉，已修正並重新驗證通過）；詳見 `docs/task-packets/V10-04_RECOMMENDATION_FORMALIZATION.md`。
 
-- [ ] `V10-05` Human Review／Decision 正式化
-  - accept／reject／skip／defer、reason、actor、timestamp、history。
-  - 權限、交易與 idempotency。
-  - 驗收：Decision 不只存在前端 session，重複提交不產生重複紀錄。
+- [x] `V10-05` Human Review／Decision 正式化 — **VERIFY（2026-07-21，程式＋SQL 完成，disposable rehearsal 驗證通過，真實主機套用待 owner 執行）**
+  - accept／reject／skip／defer／modified／needs_more_evidence、reason、actor、timestamp、history。→ `backend/sql/migrations/028_decision_formalization_expand.sql`（既有 `decisions` 表 nullable/opt-in expand，非破壞性，`accepted`/`skipped` 語意完全保留）；新增 `recommendation_revision`／`expected_outcome`／`idempotency_key`。append-only 歷史（`recordDecision()` 恆 INSERT）為既有設計，本次未變動。
+  - 權限、交易與 idempotency。→ `WorkflowController` 沿用既有 `workflow.mutate` 權限矩陣（viewer 等角色仍拒絕）；`WorkflowService::mutate()` 單一交易包住 Recommendation 儲存＋Decision 寫入＋動作邏輯＋audit log；`idempotency_key` 命中時直接回傳既有 Decision，不重複寫入。
+  - 驗收：Decision 不只存在前端 session，重複提交不產生重複紀錄。→ disposable rehearsal（45 項斷言全數通過）證明：六種 outcome 皆正確記錄且對應 `recommendations.status`；無效 decision 值使整筆 mutate() rollback（0 筆半套 Recommendation）；同一 idempotency_key 重複提交（含刻意不同的 decision/reason）只產生 1 筆記錄；append-only 歷史正確（第二次決策為新增而非覆寫）；跨 Workspace 隔離；viewer 角色被拒；`recordDecision()` 本身的交易原子性以手動 rollback 驗證兩個寫入一起復原；詳見 `docs/task-packets/V10-05_HUMAN_REVIEW_DECISION.md` 與 `backend/sql/VERIFICATION_RUNBOOK.md` 第 10 節。
 
-- [ ] `V10-06` Decision-first Dashboard
-  - Today's Signals → Evidence → Explanation → Impact → Recommendation → Review。
-  - GA／SI 模組保留為 Evidence drill-down。
-  - 驗收：使用者可在單一流程完成理解與正式決策。
+- [x] `V10-06` Decision-first Dashboard — **VERIFY（2026-07-21，程式完成，disposable rehearsal＋typecheck/lint/build 通過，真實瀏覽器登入互動驗證待 owner 執行）**
+  - Today's Signals → Evidence → Explanation → Impact → Recommendation → Review。→ 新增 `components/dashboard/TodaySignals.tsx`，掛載於 `DashboardWorkspace.tsx`；`WorkflowService.php` 新增 `signal_id` 直查路徑與 `refresh_recommendation` 動作（重用既有 formalization 邏輯，未新增業務規則）讓任何 Signal 皆可在決策前先顯示正式 Recommendation 內容。
+  - GA／SI 模組保留為 Evidence drill-down。→ `ga/page.tsx`／`seo/page.tsx` 未修改。
+  - 驗收：使用者可在單一流程完成理解與正式決策。→ disposable rehearsal（12 項斷言）證明 signal_id 解析、formalization 不落入半套 Decision/Task、idempotent 重跑、跨 Workspace 偽造 fallback 安全、另一租戶正常路徑、refresh 與 save_decision 正確組合；前端 `AbortController` 保證 Workspace 快速切換不殘留 late response；真實瀏覽器登入互動驗證需要正式後端憑證，待 owner 執行，詳見 `docs/task-packets/V10-06_DECISION_FIRST_DASHBOARD.md` 與 `backend/sql/VERIFICATION_RUNBOOK.md` 第 11 節。
 
-- [ ] `V10-07` GA／SEO／AEO／GEO Adapter 對齊
-  - 既有能力透過 Service／Repository 接到 Workspace、Signal、Evidence。
-  - 保持 legacy response compatibility。
-  - 驗收：至少 GA 與 SEO 兩條 vertical slice 通過。
+- [x] `V10-07` GA／SEO／AEO／GEO Adapter 對齊 — **VERIFY（2026-07-21，GA/SEO vertical slice 程式完成，disposable rehearsal 通過；AEO/GEO 明確 deferred gap；真實主機驗證待 owner 執行）**
+  - 既有能力透過 Service／Repository 接到 Workspace、Signal、Evidence。→ `SignalService::applyDetectionPlan()` 收斂為 SEO/GA 共用的單一 upsert/resolve/audit 邏輯；新增 `GaTrafficAnomalyDetector`（流量下滑規則）＋ `EvidenceService::recordGaTrafficAnomalyEvidence()`，接到 `ga/data_sync.php`。
+  - 保持 legacy response compatibility。→ `data_sync.php` 的 HTML console 輸出格式未變；新邏輯 try/catch 保護，失敗不影響原本回應。
+  - 驗收：至少 GA 與 SEO 兩條 vertical slice 通過。→ disposable rehearsal（22 項斷言）證明 GA 偵測生命週期（建立/bump/resolve/reopen）、跨 Workspace 隔離、Evidence dedup/連結皆正確，且 SEO 路徑經 `applyDetectionPlan()` 重構後回歸測試仍正確；AEO/GEO 因缺少 scan-history 等價持久化層，明確記錄為後續任務（非假裝完成），詳見 `docs/task-packets/V10-07_DOMAIN_ADAPTER_ALIGNMENT.md` 與 `backend/sql/VERIFICATION_RUNBOOK.md` 第 12 節。
 
-- [ ] `V10-08` Core E2E 驗收
-  - 使用真實 Workspace 執行 Data Source → Signal → Evidence → Recommendation → Decision。
-  - 驗收：資料、權限、audit 及 UI 全部可追溯。
+- [x] `V10-08` Core E2E 驗收 — **VERIFY（2026-07-21，disposable rehearsal 全鏈路通過，真實主機執行待 owner，V1.0 milestone 不轉 DONE）**
+  - 使用真實 Workspace 執行 Data Source → Signal → Evidence → Recommendation → Decision。→ disposable Docker 串接 SEO＋GA 兩條完整 golden path，33 項斷言全數通過（含跨 Workspace、角色權限、全鏈路 idempotency、fail-closed 傳遞、自動 resolve/archive）；過程中發現並修復 `RuleBasedAnalysisGenerator` 的真實跨來源缺陷（impact_area 曾寫死為 seo，GA Signal 會誤報）。真實 Workspace／真實資料執行仍待 owner 於正式主機進行，這是唯一剩餘缺口。
+  - 驗收：資料、權限、audit 及 audit 及 UI 全部可追溯。→ Decision→Recommendation→Signal→Evidence 全鏈路可 join、`actor_member_id` 恆為真實簽章身分（程式碼檢視確認 SignalService/EvidenceService/ExplanationService 皆不建立 Decision）；詳見 `docs/releases/V10-08_CORE_E2E_ACCEPTANCE_REPORT.md`。
 
 ## V1.0 出口條件
 
-- [ ] 核心決策流程可由真實資料驅動。
-- [ ] AI 不代替 Human 做正式 Decision。
-- [ ] Signal、Evidence、Recommendation、Decision 均已持久化與隔離。
+- [ ] 核心決策流程可由真實資料驅動。**BLOCKED**——disposable rehearsal 已證明程式鏈路正確（33/33 assertions，見 `docs/releases/V10-08_CORE_E2E_ACCEPTANCE_REPORT.md`），但真實 Workspace／真實資料執行需 owner 於正式主機進行，尚未執行。
+- [x] AI 不代替 Human 做正式 Decision — 程式碼檢視＋disposable rehearsal 確認 `decisions.actor_member_id` 恆為簽章請求的真實 member，無系統/AI 觸發路徑。
+- [x] Signal、Evidence、Recommendation、Decision 均已持久化與隔離（rehearsal 層級，真實主機套用待 owner）。
 
 ---
 

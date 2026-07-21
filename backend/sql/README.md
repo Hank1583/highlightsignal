@@ -146,7 +146,24 @@ never touch it:
     Recommendation becomes signal-backed (`generator_type='backend_rule'`)
     vs. stays on the untouched legacy path (`generator_type='frontend_legacy'`,
     the default for every pre-existing row).
-33. `manual_apply_bookkeeping.sql` — **the actual procedure on this hosting
+33. `preflight_v10_05_decision_inventory.sql` /
+    `migrations/028_decision_formalization_expand.sql` /
+    `postflight_v10_05_decision_invariants.sql` — V10-05 Human Review &
+    Decision Formalization. ALTERs the already-live `decisions` table
+    (migrations/011), same expand-only discipline as `027` — widens
+    `decision` from `ENUM('accepted','skipped')` to the spec's full 6-value
+    outcome set (`accepted`/`skipped`/`rejected`/`deferred`/`modified`/
+    `needs_more_evidence`), and adds `recommendation_revision` (which
+    `recommendations.revision` this Decision was made against),
+    `expected_outcome`, and an opt-in `idempotency_key` +
+    `UNIQUE(workspace_id, idempotency_key)`. `decisions` was already
+    append-only (`WorkflowRepository::recordDecision()` always INSERTs, never
+    UPDATEs) before this migration — that discipline is unchanged, only what
+    a single Decision row can express got wider. See
+    `backend/api/src/Dashboard/WorkflowRepository.php`/`WorkflowService.php`
+    for the `recommendations.status` mapping table (a smaller, unrelated
+    ENUM) and the idempotency-key short-circuit.
+34. `manual_apply_bookkeeping.sql` — **the actual procedure on this hosting
     plan today** (no SSH/cron). Paste each migration into phpMyAdmin by hand,
     then run this file's matching bookkeeping row so `schema_migrations`
     stays accurate. See `VERIFICATION_RUNBOOK.md`.
