@@ -318,6 +318,9 @@ if (isDirectExecution()) {
     require_once __DIR__ . '/../../db_connect.php';
     require_once __DIR__ . '/../../legacy_auth.php';
     $serviceMemberId = hs_require_service_member($conn);
+    // V09-08: see report_excel.php's matching comment -- check the schedule's
+    // workspace_id, not just the single creating user_id.
+    $serviceWorkspaceId = hs_resolve_member_workspace_id($conn, $serviceMemberId);
 
     $scheduleId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
     $startDate = isset($_GET['start']) ? (string)$_GET['start'] : '';
@@ -334,10 +337,10 @@ if (isDirectExecution()) {
 
     try {
         loadReportDependencies();
-        $ownerCheck = db()->prepare('SELECT user_id FROM ga_report_schedules WHERE id = ? LIMIT 1');
+        $ownerCheck = db()->prepare('SELECT workspace_id FROM ga_report_schedules WHERE id = ? LIMIT 1');
         $ownerCheck->execute(array($scheduleId));
-        $ownerId = (int) $ownerCheck->fetchColumn();
-        if ($ownerId <= 0 || $ownerId !== $serviceMemberId) {
+        $scheduleWorkspaceId = (int) $ownerCheck->fetchColumn();
+        if ($serviceWorkspaceId <= 0 || $scheduleWorkspaceId <= 0 || $scheduleWorkspaceId !== $serviceWorkspaceId) {
             http_response_code(403);
             echo json_encode(array('ok' => false, 'error' => 'Report access denied'));
             exit;

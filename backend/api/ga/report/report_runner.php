@@ -1,6 +1,34 @@
 <?php
 declare(strict_types=1);
 
+// V09-05: this endpoint had zero authentication and processes every active
+// schedule across every tenant in one shot -- it is not a per-member business
+// API, it's the cron entry point this host uses in place of real cron/SSH
+// (see docs/00_V07_TO_V12_PROGRESS_TRACKER.md's "no SSH/cron" notes). It can't
+// use the HMAC signed-request scheme (that's designed for the Next.js BFF,
+// not an external cron pinger), so it's gated by a static shared secret
+// instead -- fails closed (503) if REPORT_CRON_SECRET isn't set, so the gap
+// doesn't silently reappear once report delivery (currently unconfigured
+// per the tracker) is wired up. CLI execution (a human on the server) skips
+// this -- that's an inherently trusted caller already.
+if (PHP_SAPI !== 'cli') {
+    $reportCronSecret = getenv('REPORT_CRON_SECRET');
+    header('Content-Type: application/json; charset=utf-8');
+
+    if ($reportCronSecret === false || trim((string) $reportCronSecret) === '') {
+        http_response_code(503);
+        echo json_encode(array('ok' => false, 'error' => 'Report cron trigger is not configured.'));
+        exit;
+    }
+
+    $providedKey = isset($_GET['key']) ? (string) $_GET['key'] : '';
+    if ($providedKey === '' || !hash_equals((string) $reportCronSecret, $providedKey)) {
+        http_response_code(403);
+        echo json_encode(array('ok' => false, 'error' => 'Invalid or missing cron key.'));
+        exit;
+    }
+}
+
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/report_mailer.php';
 

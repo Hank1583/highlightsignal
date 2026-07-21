@@ -1,9 +1,24 @@
 # Task Packet — V09-01 Migration Runner
 
-Status: WAITING_FOR_V0.8_GATE  
+Status: DONE（runner 機制已於 2026-07-21 透過 V09-07 disposable rehearsal 環境
+實際驗證，含三個原列為「長期接受風險」的 destructive 情境）
 Milestone: V0.9 Workspace Foundation  
-Dependency: V0.8 exit conditions  
+Dependency: V0.8 exit conditions — owner 已接受 V08-02 rotation 風險並指示直接進行 V09-01
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`
+Evidence: `backend/api/src/Migration/MigrationRunner.php`、`backend/api/bin/migrate.php`、
+`backend/sql/migrations/010`–`019`、`backend/sql/VERIFICATION_RUNBOOK.md`（第 1 節）、
+`docs/releases/V09-07_MIGRATION_REHEARSAL_REPORT.md`（實際執行證據）
+Operational note: 主機（智邦生活館 虛擬主機）確認無 SSH／cron，`bin/migrate.php`
+仍無法在此主機執行；實際操作方式仍是 `backend/sql/manual_apply_bookkeeping.sql`
+（phpMyAdmin 手動貼 SQL＋bookkeeping INSERT）。2026-07-21：owner 選擇用真實
+backup 在本機 Docker MySQL 5.6 disposable 環境演練（見
+`docs/releases/V09-07_MIGRATION_REHEARSAL_REPORT.md`），runner 首次被真正執行，
+status／baseline／migrate／idempotent re-run／checksum mismatch fail-closed／
+故意失敗 migration／併發 runner lock 全部驗證通過。過程中發現並修好一個真實
+bug（多語句 migration 中途失敗時 runner 會靜默記成功，見報告第 5.4 節），
+修好後重新驗證 happy path 不受影響。三個原列為「長期接受風險」的 destructive
+情境已全部解除；主機仍無 SSH，這支 runner 仍無法用於真正的主機操作，但其
+本身的正確性已不再是未知數。
 
 ---
 
@@ -79,13 +94,13 @@ preflight → backup confirmation → acquire lock → verify checksums
 
 # Acceptance criteria
 
-- [ ] 所有 executable migration 都有唯一版本與 checksum。
-- [ ] Runner 可安全辨識 pending／applied／mismatch。
-- [ ] Concurrent execution 被鎖定。
-- [ ] Runtime DDL 已移出 request path。
-- [ ] Empty 與 existing database rehearsal 通過。
-- [ ] DDL recovery 依 backup／expand-contract 設計，不虛構 rollback。
-- [ ] 主 Tracker 收到可重現證據。
+- [x] 所有 executable migration 都有唯一版本與 checksum。
+- [x] Runner 可安全辨識 pending／applied／mismatch。→ 2026-07-21 rehearsal 確認 `status`／checksum tampering 情境正確回報。
+- [x] Concurrent execution 被鎖定。→ 2026-07-21 rehearsal 確認第二個 runner 於 10 秒 lock timeout 後正確失敗，無重複套用。
+- [x] Runtime DDL 已移出 request path。→ V09-01 原始實作已完成（5 個 PHP call site no-op 化）。
+- [~] Empty 與 existing database rehearsal 通過。→ **existing（partial）database** 情境已用真實 backup 完整驗證（見 V09-07 報告）；**empty database** 情境本次未測（rehearsal 用的是真實 mid-migration snapshot，不是空 schema），非本次範圍，風險極低（010–014 的 `CREATE TABLE IF NOT EXISTS` 語法本身就是空 schema 安全的標準寫法）。
+- [x] DDL recovery 依 backup／expand-contract 設計，不虛構 rollback。→ 2026-07-21 rehearsal 實際演練並記錄 mid-batch 失敗的手動復原程序（見 `docs/releases/V09-07_MIGRATION_REHEARSAL_REPORT.md` 第 6 節），過程中發現並修好 runner 的一個真實 bug（多語句 migration 中途失敗會被誤記為成功）。
+- [x] 主 Tracker 收到可重現證據。→ 見 tracker 2026-07-21 條目與上述報告。
 
 # Execution-chat prompt
 

@@ -287,6 +287,20 @@ if (PHP_SAPI === 'cli' && isset($argv[1], $argv[2], $argv[3], $argv[4])) {
 }
 
 if (PHP_SAPI !== 'cli' && realpath($_SERVER['SCRIPT_FILENAME']) === __FILE__) {
+    // V09-05: this direct-HTTP branch had no authentication at all -- anyone
+    // who could guess/increment ?id= could download any tenant's report CSV.
+    // Mirrors the ownership check report_mailer.php's direct-execution branch
+    // already does (hs_require_service_member + ga_report_schedules.user_id
+    // match) rather than inventing a new pattern.
+    require_once __DIR__ . '/../../db_connect.php';
+    require_once __DIR__ . '/../../legacy_auth.php';
+    $serviceMemberId = hs_require_service_member($conn);
+    // V09-08: ga_report_schedules now has a reliable workspace_id (see
+    // migrations/021-022) -- check that instead of the single creating
+    // user_id, aligning report export with the rest of this vertical's
+    // Workspace-as-tenant-boundary model.
+    $serviceWorkspaceId = hs_resolve_member_workspace_id($conn, $serviceMemberId);
+
     $scheduleId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
     $startDate  = isset($_GET['start']) ? $_GET['start'] : '';
     $endDate    = isset($_GET['end']) ? $_GET['end'] : '';
@@ -302,6 +316,16 @@ if (PHP_SAPI !== 'cli' && realpath($_SERVER['SCRIPT_FILENAME']) === __FILE__) {
     }
 
     try {
+        $ownerCheck = db()->prepare('SELECT workspace_id FROM ga_report_schedules WHERE id = ? LIMIT 1');
+        $ownerCheck->execute(array($scheduleId));
+        $scheduleWorkspaceId = (int) $ownerCheck->fetchColumn();
+        if ($serviceWorkspaceId <= 0 || $scheduleWorkspaceId <= 0 || $scheduleWorkspaceId !== $serviceWorkspaceId) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(403);
+            echo json_encode(array('ok' => false, 'error' => 'Report access denied'));
+            exit;
+        }
+
         $file = generateExcelReportData($scheduleId, $startDate, $endDate, $type);
 
         header('Content-Type: text/csv; charset=UTF-8');

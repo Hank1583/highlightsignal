@@ -61,32 +61,20 @@ if (!$userId || !$siteId) {
   history_fail('user_id or site_id missing', 'MISSING_PARAMS');
 }
 
-$createSql = "
-  CREATE TABLE IF NOT EXISTS seo_pagespeed_history (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    user_id BIGINT UNSIGNED NOT NULL,
-    site_id BIGINT UNSIGNED NOT NULL,
-    strategy ENUM('mobile', 'desktop') NOT NULL,
-    url VARCHAR(500) NOT NULL,
-    score TINYINT UNSIGNED NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'unknown',
-    metrics_json LONGTEXT NOT NULL,
-    fetched_at DATETIME NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    KEY idx_seo_pagespeed_history_lookup (user_id, site_id, strategy, fetched_at),
-    KEY idx_seo_pagespeed_history_site_id (site_id)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-";
+// V09-04: scope by workspace_id (resolved server-side, not the signed
+// x-hs-workspace-id header -- see legacy_auth.php's
+// hs_resolve_member_workspace_id() for why) in addition to the existing
+// user_id check.
+$workspaceId = hs_resolve_member_workspace_id($conn, $userId);
 
-if (!$conn->query($createSql)) {
-  history_fail($conn->error, 'HISTORY_TABLE_CREATE_FAILED', 500);
-}
+// seo_pagespeed_history is provisioned by backend/sql/migrations/013_runtime_ddl_extraction.sql.
+// The table-create step is intentionally gone; the dedup backfill below still runs.
+// workspace_id is copied straight from the cache row (V09-04).
 
 $backfill = $conn->prepare("
   INSERT INTO seo_pagespeed_history
-    (user_id, site_id, strategy, url, score, status, metrics_json, fetched_at)
-  SELECT c.user_id, c.site_id, c.strategy, c.url, c.score, c.status, c.metrics_json, c.fetched_at
+    (user_id, site_id, workspace_id, strategy, url, score, status, metrics_json, fetched_at)
+  SELECT c.user_id, c.site_id, c.workspace_id, c.strategy, c.url, c.score, c.status, c.metrics_json, c.fetched_at
   FROM seo_pagespeed_cache c
   WHERE c.user_id = ? AND c.site_id = ? AND c.strategy = ?
     AND NOT EXISTS (
@@ -108,7 +96,7 @@ $backfill->execute();
 $stmt = $conn->prepare("
   SELECT url, strategy, score, status, metrics_json, fetched_at
   FROM seo_pagespeed_history
-  WHERE user_id = ? AND site_id = ? AND strategy = ?
+  WHERE user_id = ? AND site_id = ? AND workspace_id = ? AND strategy = ?
   ORDER BY fetched_at DESC, id DESC
   LIMIT ?
 ");
@@ -117,7 +105,7 @@ if (!$stmt) {
   history_fail($conn->error, 'SQL_PREPARE_FAILED', 500);
 }
 
-$stmt->bind_param('iisi', $userId, $siteId, $strategy, $limit);
+$stmt->bind_param('iiisi', $userId, $siteId, $workspaceId, $strategy, $limit);
 $stmt->execute();
 $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 

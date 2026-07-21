@@ -1,4 +1,11 @@
 <?php
+
+declare(strict_types=1);
+
+use HighlightSignal\Workspace\AuthorizationException;
+use HighlightSignal\Workspace\WorkspaceAccessPolicy;
+use HighlightSignal\Workspace\WorkspacePermissions;
+
 header("Content-Type: application/json; charset=utf-8");
 require_once __DIR__ . "/../db_connect.php";
 require_once __DIR__ . "/../legacy_auth.php";
@@ -9,6 +16,21 @@ require_once __DIR__ . "/ownership.php";
 ========================= */
 $input = json_decode(file_get_contents("php://input"), true);
 $memberId = hs_require_service_member($conn, isset($input['user_id']) ? $input['user_id'] : 0);
+
+// V09-08: resolve workspace_id server-side and require active membership
+// before touching any GA analytics data.
+$workspaceId = hs_resolve_member_workspace_id($conn, $memberId);
+
+try {
+    $membership = (new WorkspaceAccessPolicy($conn))->requireActiveMembership($workspaceId, $memberId);
+    WorkspacePermissions::requirePermission($membership, 'read');
+} catch (AuthorizationException $error) {
+    echo json_encode([
+        "ok" => false,
+        "message" => "Workspace access denied."
+    ]);
+    exit;
+}
 
 $type  = $input['type']  ?? null;
 $ids   = $input['ids']   ?? [];
@@ -33,7 +55,7 @@ if (
 $ids = array_map("intval", $ids);
 $placeholders = implode(",", array_fill(0, count($ids), "?"));
 
-ga_require_connection_ownership($conn, $memberId, $ids);
+ga_require_connection_ownership($conn, $workspaceId, $ids);
 
 /* =========================
    3️⃣ Router by type

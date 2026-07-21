@@ -1,4 +1,11 @@
 <?php
+
+declare(strict_types=1);
+
+use HighlightSignal\Workspace\AuthorizationException;
+use HighlightSignal\Workspace\WorkspaceAccessPolicy;
+use HighlightSignal\Workspace\WorkspacePermissions;
+
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . "/../db_connect.php";
 require_once __DIR__ . "/../legacy_auth.php";
@@ -27,11 +34,22 @@ if ($user_id <= 0) {
     exit;
 }
 
+// V09-08: same integration-configuration gate as ga_report_save.php.
+$workspace_id = hs_resolve_member_workspace_id($conn, $user_id);
+
+try {
+    $membership = (new WorkspaceAccessPolicy($conn))->requireActiveMembership($workspace_id, $user_id);
+    WorkspacePermissions::requirePermission($membership, 'integrations.manage');
+} catch (AuthorizationException $error) {
+    echo json_encode(['success' => false, 'message' => 'Workspace role cannot manage report schedules.']);
+    exit;
+}
+
 // === 其餘欄位（直接沿用你 save 的）===
 $report_name    = trim($input['report_name'] ?? '');
 $report_type    = $input['report_type'] ?? '';
 $connection_ids = $input['connection_ids'] ?? [];
-$connection_ids = ga_require_connection_ownership($conn, $user_id, is_array($connection_ids) ? $connection_ids : array());
+$connection_ids = ga_require_connection_ownership($conn, $workspace_id, is_array($connection_ids) ? $connection_ids : array());
 
 $send_weekday   = isset($input['send_weekday']) ? intval($input['send_weekday']) : null;
 $send_monthday  = isset($input['send_monthday']) ? intval($input['send_monthday']) : null;
@@ -62,10 +80,11 @@ $stmt = $conn->prepare("
         is_active = ?
     WHERE id = ?
       AND user_id = ?
+      AND workspace_id = ?
 ");
 
 $stmt->bind_param(
-    "sssiissssiii",
+    "sssiissssiiii",
     $report_name,
     $report_type,
     $connection_ids_json,
@@ -77,7 +96,8 @@ $stmt->bind_param(
     $section_list_json,
     $is_active,
     $id,
-    $user_id
+    $user_id,
+    $workspace_id
 );
 
 $success = $stmt->execute();

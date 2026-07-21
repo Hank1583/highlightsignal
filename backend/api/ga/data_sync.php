@@ -2,10 +2,33 @@
 
 declare(strict_types=1);
 
+use HighlightSignal\Workspace\AuthorizationException;
+use HighlightSignal\Workspace\WorkspaceAccessPolicy;
+use HighlightSignal\Workspace\WorkspacePermissions;
+
 require_once __DIR__ . '/../db_connect.php';
 require_once __DIR__ . '/../legacy_auth.php';
 
 $member_id = hs_require_service_member($conn, $_GET['member_id'] ?? 0);
+
+// V09-08: this console triggers a real Google Analytics Data API pull and
+// writes rows for every connection it's scoped to -- gated the same way as
+// other integration-sync actions (account_fetch.php,
+// update_connection_status.php), not left open to any signed member. Was
+// previously scoped by raw $_GET['member_id'] with no membership/role check
+// at all.
+$workspace_id = hs_resolve_member_workspace_id($conn, $member_id);
+
+try {
+    $membership = (new WorkspaceAccessPolicy($conn))->requireActiveMembership($workspace_id, $member_id);
+    WorkspacePermissions::requirePermission($membership, 'integrations.manage');
+} catch (AuthorizationException $error) {
+    http_response_code(403);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(array('ok' => false, 'error' => 'Workspace role cannot sync integrations.'));
+    exit;
+}
+
 //----------------------------------------
 // 1. 禁用所有 Buffer（HTML 即時輸出必要）
 //----------------------------------------
@@ -97,13 +120,14 @@ $period = new DatePeriod(
 /*****************************************************
  * 讀取所有 GA 連結設定
  *****************************************************/
-$sql = "SELECT * FROM ga_connections WHERE status = 1";
-if ($member_id !== null && $member_id !== "") {
-    $member_id = intval($member_id); // 防呆
-    $sql .= " AND member_id = $member_id";
-}
-
-$res = $conn->query($sql);
+// V09-08: scoped by the resolved, membership-checked workspace_id rather than
+// the raw member_id -- ga_connections.workspace_id has been reliably
+// backfilled since V09-03/016.
+$sql = "SELECT * FROM ga_connections WHERE status = 1 AND workspace_id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param('i', $workspace_id);
+$stmt->execute();
+$res = $stmt->get_result();
 // $res = $conn->query("SELECT * FROM ga_connections WHERE status=1");
 
 while ($row = $res->fetch_assoc()) {

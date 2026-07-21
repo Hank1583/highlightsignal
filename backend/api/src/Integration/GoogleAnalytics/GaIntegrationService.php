@@ -6,7 +6,7 @@ namespace HighlightSignal\Integration\GoogleAnalytics;
 
 use HighlightSignal\Auth\ServiceIdentity;
 use HighlightSignal\Http\ValidationException;
-use HighlightSignal\Workspace\AuthorizationException;
+use HighlightSignal\Workspace\WorkspacePermissions;
 use mysqli;
 
 final class GaIntegrationService
@@ -31,9 +31,7 @@ final class GaIntegrationService
         int $connectionId,
         int $status
     ): array {
-        if (!in_array($membership['role'], array('owner', 'admin', 'manager'), true)) {
-            throw new AuthorizationException('Workspace role cannot update integrations.');
-        }
+        WorkspacePermissions::requirePermission($membership, 'integrations.manage');
 
         if ($connectionId <= 0 || !in_array($status, array(0, 1), true)) {
             throw new ValidationException('Invalid GA connection settings.');

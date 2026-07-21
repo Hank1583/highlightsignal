@@ -1,11 +1,15 @@
 <?php
 
 use HighlightSignal\Config\Environment;
+use HighlightSignal\Workspace\AuthorizationException;
+use HighlightSignal\Workspace\WorkspaceAccessPolicy;
+use HighlightSignal\Workspace\WorkspacePermissions;
 
 require_once __DIR__ . '/../db_connect.php'; // 資料庫連線
 
 // Step 1: Google 回傳的 code
 if (!isset($_GET["code"])) {
+    http_response_code(400);
     die("Missing code");
 }
 
@@ -30,11 +34,61 @@ if ($padding > 0) {
 }
 $state = json_decode(base64_decode(strtr($encodedState, '-_', '+/'), true), true);
 $member_id = isset($state["member_id"]) ? intval($state["member_id"]) : 0;
+$workspace_id = isset($state['workspace_id']) ? intval($state['workspace_id']) : 0;
+$stateNonce = isset($state['nonce']) ? (string) $state['nonce'] : '';
 $stateTimestamp = isset($state['ts']) ? (int) $state['ts'] : 0;
 
-if ($member_id <= 0 || $stateTimestamp <= 0 || abs(time() - $stateTimestamp) > 600) {
+if ($member_id <= 0 || $workspace_id <= 0 || $stateTimestamp <= 0 || abs(time() - $stateTimestamp) > 600) {
     http_response_code(400);
     die('Expired OAuth state');
+}
+
+if (!preg_match('/^[A-Za-z0-9]{16,64}$/', $stateNonce)) {
+    http_response_code(400);
+    die('Invalid OAuth state');
+}
+
+// Replay protection: the signed state itself is only valid inside the 600s
+// window above, but the same value could otherwise be resubmitted freely
+// within that window. Claim its nonce exactly once (reusing the same
+// service_request_nonces table the signed-header auth flow uses); a second
+// attempt hits the nonce's PRIMARY KEY and is rejected.
+$nonceStatement = $conn->prepare(
+    'INSERT INTO service_request_nonces (nonce, requested_at, expires_at) VALUES (?, FROM_UNIXTIME(?), FROM_UNIXTIME(?))'
+);
+$nonceExpiresAt = $stateTimestamp + 600;
+$nonceStatement->bind_param('sii', $stateNonce, $stateTimestamp, $nonceExpiresAt);
+
+$nonceClaimed = false;
+$nonceDuplicateKey = false;
+try {
+    $nonceClaimed = $nonceStatement->execute();
+    $nonceDuplicateKey = !$nonceClaimed && (int) $nonceStatement->errno === 1062;
+} catch (mysqli_sql_exception $error) {
+    $nonceDuplicateKey = (int) $error->getCode() === 1062;
+}
+
+if (!$nonceClaimed) {
+    http_response_code($nonceDuplicateKey ? 400 : 500);
+    die($nonceDuplicateKey ? 'OAuth state already used' : 'Unable to record OAuth state');
+}
+
+// Independently re-verify workspace access at callback time rather than
+// trusting the signed state's workspace_id alone -- membership may have
+// changed between initiation and this callback, and this is the actual
+// enforcement point for "callback does not accept an arbitrary workspace ID."
+try {
+    $membership = (new WorkspaceAccessPolicy($conn))->requireActiveMembership($workspace_id, $member_id);
+} catch (AuthorizationException $error) {
+    http_response_code(403);
+    die('Workspace access denied.');
+}
+
+try {
+    WorkspacePermissions::requirePermission($membership, 'integrations.manage');
+} catch (AuthorizationException $error) {
+    http_response_code(403);
+    die('Workspace role cannot link integrations.');
 }
 
 // Provider configuration is checked only after untrusted callback state has
@@ -152,18 +206,21 @@ foreach ($properties["properties"] as $prop) {
 
     $stream_list = json_encode($streams["dataStreams"] ?? []);
 
-    // 假設你有 member_id（登入使用者）
-    // 寫進 DB
+    // member_id kept for legacy compatibility (see tracker: retained through V1
+    // migration); workspace_id is now written directly at link time so a newly
+    // created connection is workspace-scoped immediately, without depending on
+    // migrations/016's backfill.
     $stmt = $conn->prepare("
-        INSERT INTO ga_connections 
-        (member_id, property_id, account_name, refresh_token, streams_json, status)
-        VALUES (?, ?, ?, ?, ?, 1)
-        ON DUPLICATE KEY UPDATE 
+        INSERT INTO ga_connections
+        (member_id, workspace_id, property_id, account_name, refresh_token, streams_json, status)
+        VALUES (?, ?, ?, ?, ?, ?, 1)
+        ON DUPLICATE KEY UPDATE
+            workspace_id = VALUES(workspace_id),
             refresh_token = VALUES(refresh_token),
             streams_json = VALUES(streams_json)
     ");
 
-    $stmt->bind_param("issss", $member_id, $property_id, $property_name, $refresh_token, $stream_list);
+    $stmt->bind_param("iissss", $member_id, $workspace_id, $property_id, $property_name, $refresh_token, $stream_list);
     $stmt->execute();
 }
 

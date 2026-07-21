@@ -772,10 +772,16 @@ if (!$user_id || !$site_id) {
   fail("user_id or site_id missing", "MISSING_PARAMS");
 }
 
+// V09-04: scope by workspace_id (resolved server-side, not the signed
+// x-hs-workspace-id header -- see legacy_auth.php's
+// hs_resolve_member_workspace_id() for why) in addition to the existing
+// user_id check.
+$workspace_id = hs_resolve_member_workspace_id($conn, $user_id);
+
 $stmt = $conn->prepare("
   SELECT id, site_name, site_url
   FROM seo_sites
-  WHERE id = ? AND user_id = ?
+  WHERE id = ? AND user_id = ? AND workspace_id = ?
   LIMIT 1
 ");
 
@@ -785,7 +791,7 @@ if ($stmt === false) {
   ]);
 }
 
-$stmt->bind_param("ii", $site_id, $user_id);
+$stmt->bind_param("iii", $site_id, $user_id, $workspace_id);
 $stmt->execute();
 $result = $stmt->get_result();
 $siteRow = $result->fetch_assoc();
@@ -808,12 +814,12 @@ if (!$force) {
   $cacheStmt = $conn->prepare("
     SELECT summary_json, updated_at
     FROM seo_summary_cache
-    WHERE site_id = ? AND user_id = ?
+    WHERE site_id = ? AND user_id = ? AND workspace_id = ?
     LIMIT 1
   ");
 
   if ($cacheStmt) {
-    $cacheStmt->bind_param("ii", $site_id, $user_id);
+    $cacheStmt->bind_param("iii", $site_id, $user_id, $workspace_id);
     $cacheStmt->execute();
     $cacheResult = $cacheStmt->get_result();
     $cacheRow = $cacheResult->fetch_assoc();
@@ -907,9 +913,9 @@ foreach ($issues as &$issue) {
 unset($issue);
 
 $previousScan = null;
-$previousStmt = $conn->prepare('SELECT health_score, issue_count, issues_json, scanned_at FROM seo_scan_history WHERE site_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1');
+$previousStmt = $conn->prepare('SELECT health_score, issue_count, issues_json, scanned_at FROM seo_scan_history WHERE site_id = ? AND user_id = ? AND workspace_id = ? ORDER BY id DESC LIMIT 1');
 if ($previousStmt) {
-  $previousStmt->bind_param('ii', $site_id, $user_id);
+  $previousStmt->bind_param('iii', $site_id, $user_id, $workspace_id);
   $previousStmt->execute();
   $previousScan = $previousStmt->get_result()->fetch_assoc();
 }
@@ -974,13 +980,91 @@ $finalData = [
 
 $scanJson = json_encode($finalData, JSON_UNESCAPED_UNICODE);
 $issuesJson = json_encode($issues, JSON_UNESCAPED_UNICODE);
+$scanHistoryId = 0;
 if ($scanJson !== false && $issuesJson !== false) {
-  $scanStmt = $conn->prepare('INSERT INTO seo_scan_history (site_id, user_id, health_score, issue_count, issues_json, summary_json) VALUES (?, ?, ?, ?, ?, ?)');
+  $scanStmt = $conn->prepare('INSERT INTO seo_scan_history (site_id, user_id, workspace_id, health_score, issue_count, issues_json, summary_json) VALUES (?, ?, ?, ?, ?, ?, ?)');
   if ($scanStmt) {
     $healthScore = (int)$health['score'];
     $issueCount = count($issues);
-    $scanStmt->bind_param('iiiiss', $site_id, $user_id, $healthScore, $issueCount, $issuesJson, $scanJson);
+    $scanStmt->bind_param('iiiiiss', $site_id, $user_id, $workspace_id, $healthScore, $issueCount, $issuesJson, $scanJson);
     $scanStmt->execute();
+    $scanHistoryId = (int)$scanStmt->insert_id;
+  }
+}
+
+/* ======================================================
+ * SIGNAL DETECTION (V10-01)
+ * ====================================================== */
+// Triggered synchronously right after the scan is persisted, not queued --
+// V11-02's Queue Worker doesn't exist yet, and per spec section 6, Signal
+// Detection is an AI/rule-based capability that does not require Human
+// Review to execute (only a Decision does). $previousIssues is the same
+// prior-scan issue list already read above to build $comparison, so the
+// detector's diff is against the exact same prior state, not recomputed
+// independently.
+try {
+  $signalRepository = new \HighlightSignal\Signal\SignalRepository($conn);
+  $signalService = new \HighlightSignal\Signal\SignalService($conn, $signalRepository);
+  $signalService->runSeoTechnicalIssueDetection($workspace_id, $site_id, $issues, $previousIssues);
+} catch (\Throwable $signalError) {
+  // Signal detection must never break the SEO scan response itself -- a
+  // missed detection is recoverable on the next scan; failing the whole
+  // request because of it is not proportional.
+  error_log('Signal detection failed: ' . $signalError->getMessage());
+}
+
+/* ======================================================
+ * EVIDENCE RECORDING (V10-02)
+ * ====================================================== */
+// Reuses the same SignalRepository instance above to look up which Signal
+// each piece of Evidence belongs to. Skipped entirely if the scan_history
+// INSERT above didn't happen (no source_ref_id to attach) -- Evidence must
+// never fabricate a source reference.
+if ($scanHistoryId > 0) {
+  try {
+    $evidenceRepository = new \HighlightSignal\Evidence\EvidenceRepository($conn);
+    $evidenceService = new \HighlightSignal\Evidence\EvidenceService($evidenceRepository, $signalRepository);
+    $evidenceService->recordSeoTechnicalIssueEvidence(
+      $workspace_id,
+      $site_id,
+      $issues,
+      $previousIssues,
+      $scanHistoryId,
+      $currentScannedAt
+    );
+  } catch (\Throwable $evidenceError) {
+    // Same proportionality rule as Signal detection above -- a missed
+    // Evidence snapshot is recoverable on the next scan.
+    error_log('Evidence recording failed: ' . $evidenceError->getMessage());
+  }
+
+  /* ======================================================
+   * EXPLANATION / BUSINESS IMPACT (V10-03)
+   * ====================================================== */
+  // Re-derives the same dedup_key set as the Signal/Evidence calls above
+  // (cheap, stateless Detector) purely to know WHICH signals were just
+  // touched this scan, then asks ExplanationService to (re)generate their
+  // analysis -- idempotent, so calling it every scan is safe even when
+  // nothing about the signal or its evidence changed.
+  try {
+    $seoDetector = new \HighlightSignal\Signal\Detector\SeoTechnicalIssueDetector();
+    $seoPlan = $seoDetector->diff($site_id, $issues, $previousIssues);
+    $explanationRepository = new \HighlightSignal\Explanation\ExplanationRepository($conn);
+    $explanationService = new \HighlightSignal\Explanation\ExplanationService(
+      $explanationRepository,
+      $signalRepository,
+      $evidenceRepository
+    );
+    foreach ($seoPlan['to_upsert'] as $planItem) {
+      $touchedSignal = $signalRepository->findByDedupKey($workspace_id, $planItem['dedup_key']);
+      if (is_array($touchedSignal)) {
+        $explanationService->readOrGenerateForSignal($workspace_id, (int)$touchedSignal['id']);
+      }
+    }
+  } catch (\Throwable $explanationError) {
+    // Same proportionality rule -- a missed analysis is recoverable on the
+    // next scan or the next direct GET .../analysis call.
+    error_log('Explanation/Impact generation failed: ' . $explanationError->getMessage());
   }
 }
 
@@ -991,15 +1075,15 @@ $cacheJson = json_encode($finalData, JSON_UNESCAPED_UNICODE);
 
 if ($cacheJson !== false) {
   $saveStmt = $conn->prepare("
-    INSERT INTO seo_summary_cache (site_id, user_id, summary_json)
-    VALUES (?, ?, ?)
+    INSERT INTO seo_summary_cache (site_id, user_id, workspace_id, summary_json)
+    VALUES (?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
       summary_json = VALUES(summary_json),
       updated_at = CURRENT_TIMESTAMP
   ");
 
   if ($saveStmt) {
-    $saveStmt->bind_param("iis", $site_id, $user_id, $cacheJson);
+    $saveStmt->bind_param("iiis", $site_id, $user_id, $workspace_id, $cacheJson);
     $saveStmt->execute();
   }
 }

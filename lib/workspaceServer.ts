@@ -50,23 +50,32 @@ export async function resolveWorkspaceContext(
       source: "backend",
     };
   } catch (error) {
-    // During the workspace migration, a stale selected workspace can fail the
-    // backend context check even though the user's legacy member data is valid.
-    // Fall back to the member's synthetic legacy workspace instead of surfacing
-    // WORKSPACE_FORBIDDEN in legacy-backed product pages.
-    if (
-      workspaceId !== Number(session.id) &&
-      !(error instanceof Error && error.message === "WORKSPACE_FORBIDDEN")
-    ) {
+    // WORKSPACE_FORBIDDEN is an authoritative authorization decision from the
+    // backend (suspended membership, or a workspace the member explicitly
+    // requested but doesn't belong to) -- V09-02/05 require that a legacy
+    // fallback never bypass a membership check, so this is never swallowed.
+    if (error instanceof Error && error.message === "WORKSPACE_FORBIDDEN") {
       throw error;
     }
 
-    return {
-      workspaceId: Number(session.id),
-      memberId: Number(session.id),
-      legacyOwnerMemberId: Number(session.id),
-      role: "owner",
-      source: "legacy",
-    };
+    // Otherwise this is a genuine backend-unavailable condition (network/DB
+    // outage, malformed response), and only when no explicit alternate
+    // workspace was requested: degrade to the member's own legacy context so
+    // legacy per-member pages don't hard-fail during an outage. This still
+    // can't bypass authorization -- legacyOwnerMemberId is always the caller's
+    // own member id, and the legacy PHP endpoints that consume it independently
+    // re-resolve and gate on workspace membership/status server-side
+    // (V09-04/V09-05), so a fabricated context here has nothing to bypass.
+    if (workspaceId === Number(session.id)) {
+      return {
+        workspaceId: Number(session.id),
+        memberId: Number(session.id),
+        legacyOwnerMemberId: Number(session.id),
+        role: "owner",
+        source: "legacy",
+      };
+    }
+
+    throw error;
   }
 }

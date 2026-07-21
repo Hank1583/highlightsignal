@@ -183,6 +183,14 @@ export default function DashboardTasksPage() {
   };
 
   useEffect(() => {
+    // Clear the previous Workspace's tasks immediately on switch; loadTasks
+    // below already sets loading=true, which gates the list render, but this
+    // also drops stale items out of memory rather than leaving them until the
+    // new Workspace's fetch resolves.
+    setItems([]);
+  }, [currentWorkspace.id]);
+
+  useEffect(() => {
     void loadTasks();
   }, [loadTasks]);
 

@@ -3,7 +3,7 @@ Options -Indexes
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule ^api/v1(?:/.*)?$ public/index.php [QSA,L]
-  RewriteRule ^(?:src|config|workers)/ - [F,L,NC]
+  RewriteRule ^(?:src|config|workers|bin)/ - [F,L,NC]
   RewriteRule ^(?:api_helpers|auth|db_connect|legacy_auth)\.php$ - [F,L,NC]
   RewriteRule ^ga/api_client\.php$ - [F,L,NC]
   RewriteRule ^ga/ownership\.php$ - [F,L,NC]

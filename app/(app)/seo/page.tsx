@@ -44,6 +44,32 @@ type SeoWorkflow = {
   task: { id: number; status: string; steps: Array<{ id: number; title: string; status: "pending" | "completed" }> } | null;
   outcome: { status: string } | null;
 };
+type Signal = {
+  id: number;
+  type: string;
+  severity: "critical" | "high" | "medium" | "low" | "info";
+  status: "new" | "acknowledged" | "resolved" | "dismissed";
+  title: string;
+  summary: string;
+  detected_at: string;
+  last_seen_at: string;
+  occurrence_count: number;
+};
+type SignalAnalysis = {
+  id: number;
+  status: "ok" | "insufficient_evidence" | "failed";
+  evidence_ids: number[];
+  explanation: { text: string | null; confidence: number | null };
+  business_impact: {
+    area: string | null;
+    direction: "positive" | "negative" | "neutral" | "unknown";
+    magnitude: string | null;
+    confidence: number | null;
+    basis: string | null;
+    limitations: string | null;
+  };
+  generator: { type: "rule" | "ai"; provider: string | null; model: string | null; version: string };
+};
 
 const seoTabs = [
   { key: "overview", label: "1. 總覽", href: "/si/seo" },
@@ -78,6 +104,31 @@ function severityClass(severity: string) {
   return "bg-blue-100 text-blue-700";
 }
 
+function signalStatusClass(status: Signal["status"]) {
+  if (status === "new") return "bg-rose-100 text-rose-700";
+  if (status === "acknowledged") return "bg-amber-100 text-amber-700";
+  if (status === "resolved") return "bg-emerald-100 text-emerald-700";
+  return "bg-slate-100 text-slate-600";
+}
+
+function signalStatusLabel(status: Signal["status"]) {
+  if (status === "new") return "新偵測";
+  if (status === "acknowledged") return "已確認";
+  if (status === "resolved") return "已解決";
+  return "已忽略";
+}
+
+function impactDirectionLabel(direction: SignalAnalysis["business_impact"]["direction"]) {
+  if (direction === "negative") return "負面影響";
+  if (direction === "positive") return "正面影響";
+  if (direction === "neutral") return "中性";
+  return "尚無法判斷";
+}
+
+function generatorLabel(generator: SignalAnalysis["generator"]) {
+  return generator.type === "ai" ? `AI 生成（${generator.model || generator.provider || "未知模型"}）` : "規則式產生（非 AI）";
+}
+
 function metricTone(status: PageSpeedMetric["status"]) {
   if (status === "good") return "text-emerald-700";
   if (status === "average") return "text-amber-700";
@@ -110,6 +161,12 @@ export default function SeoPage() {
   const [loadingPageSpeed, setLoadingPageSpeed] = useState(false);
   const [loadingPageSpeedHistory, setLoadingPageSpeedHistory] = useState(false);
   const [pageSpeedError, setPageSpeedError] = useState("");
+  const [signals, setSignals] = useState<Signal[]>([]);
+  const [loadingSignals, setLoadingSignals] = useState(false);
+  const [signalBusyId, setSignalBusyId] = useState<number | null>(null);
+  const [expandedSignalId, setExpandedSignalId] = useState<number | null>(null);
+  const [analysisById, setAnalysisById] = useState<Record<number, SignalAnalysis>>({});
+  const [loadingAnalysisId, setLoadingAnalysisId] = useState<number | null>(null);
   const isDemo = Boolean(user?.isDemo);
 
   const selectedSite = useMemo(
@@ -254,6 +311,71 @@ export default function SeoPage() {
     [isDemo, loadPageSpeedHistory, selectedSiteId, workspaceId]
   );
 
+  const loadSignals = useCallback(async () => {
+    try {
+      setLoadingSignals(true);
+      const response = await fetch(`/api/workspaces/${workspaceId}/signals?severity=&status=`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const json = await parseJsonSafe<{ ok: boolean; data?: { items: Signal[] }; error?: { message?: string } }>(response);
+      if (!response.ok || !json.ok || !json.data) throw new Error(getErrorMessage(json, "讀取 Signal 失敗。"));
+      setSignals(json.data.items);
+    } catch {
+      setSignals([]);
+    } finally {
+      setLoadingSignals(false);
+    }
+  }, [workspaceId]);
+
+  const updateSignalStatus = useCallback(
+    async (signalId: number, status: "acknowledged" | "dismissed") => {
+      if (isDemo) return;
+      try {
+        setSignalBusyId(signalId);
+        const response = await fetch(`/api/workspaces/${workspaceId}/signals`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signal_id: signalId, status }),
+        });
+        const json = await parseJsonSafe<{ ok: boolean; data?: Signal; error?: { message?: string } }>(response);
+        if (!response.ok || !json.ok || !json.data) throw new Error(getErrorMessage(json, "更新 Signal 失敗。"));
+        setSignals((current) => current.map((item) => (item.id === signalId ? { ...item, ...json.data! } : item)));
+      } catch {
+        // Non-critical for this minimal integration -- V10-06 owns the real UI.
+      } finally {
+        setSignalBusyId(null);
+      }
+    },
+    [isDemo, workspaceId]
+  );
+
+  const toggleSignalAnalysis = useCallback(
+    async (signalId: number) => {
+      if (expandedSignalId === signalId) {
+        setExpandedSignalId(null);
+        return;
+      }
+      setExpandedSignalId(signalId);
+      if (analysisById[signalId]) return;
+      try {
+        setLoadingAnalysisId(signalId);
+        const response = await fetch(`/api/workspaces/${workspaceId}/signals/${signalId}/analysis`, {
+          method: "GET",
+          cache: "no-store",
+        });
+        const json = await parseJsonSafe<{ ok: boolean; data?: SignalAnalysis; error?: { message?: string } }>(response);
+        if (!response.ok || !json.ok || !json.data) throw new Error(getErrorMessage(json, "讀取 Explanation/Impact 失敗。"));
+        setAnalysisById((current) => ({ ...current, [signalId]: json.data! }));
+      } catch {
+        // Non-critical for this minimal integration.
+      } finally {
+        setLoadingAnalysisId(null);
+      }
+    },
+    [analysisById, expandedSignalId, workspaceId]
+  );
+
   const createIssueTask = useCallback(
     async (issue: SummaryData["technicalIssues"][number]) => {
       if (!selectedSiteId || isDemo) return;
@@ -265,6 +387,18 @@ export default function SeoPage() {
           action: "create_task",
           title: `修復 SEO 技術問題：${issue.type}`,
           description: `${issue.message}\nURL：${issue.url}\nAI 建議：${issue.recommendation || "請依照 SEO 檢測結果修正後重新掃描。"}`,
+          // V10-04: real observed facts (which site, which detector issue
+          // type, which URL), not a business claim -- lets the backend
+          // resolve the real Signal this task is for and build the
+          // Recommendation's title/priority/impact/reason from Signal/
+          // Evidence/Explanation instead of trusting title/description
+          // above. Falls back to the legacy fields if no matching Signal
+          // resolves (e.g. Signal pipeline hasn't run yet for this scan).
+          signal_context: {
+            site_id: selectedSiteId,
+            issue_type: issue.type,
+            url: issue.url,
+          },
           steps: [
             { title: "確認受影響頁面", description: issue.url },
             { title: "依照建議修正技術問題", description: issue.recommendation || issue.message },
@@ -321,8 +455,27 @@ export default function SeoPage() {
   }, []);
 
   useEffect(() => {
+    // Clear the previous Workspace's sites/summary immediately on switch so
+    // stale content isn't shown while the new Workspace's sites reload.
+    setSites([]);
+    setSelectedSiteId(null);
+    setSummary(null);
+    setPageSpeed(null);
+    setPageSpeedHistory([]);
+    setWorkflow({});
+    setErrorText("");
+    setSignals([]);
+    setExpandedSignalId(null);
+    setAnalysisById({});
+  }, [workspaceId]);
+
+  useEffect(() => {
     loadSites();
   }, [loadSites]);
+
+  useEffect(() => {
+    void loadSignals();
+  }, [loadSignals]);
 
   useEffect(() => {
     if (selectedSiteId) loadSummary(selectedSiteId);
@@ -498,6 +651,123 @@ export default function SeoPage() {
                 ) : null}
 
                 {workflowError ? <Notice tone="error" text={workflowError} /> : null}
+
+                <InfoCard title="Signal（系統偵測事件）">
+                  <p className="mb-3 text-xs text-slate-500">
+                    每次重新掃描時系統自動偵測的技術問題新增／修復事件，同一問題重複偵測不會產生重複紀錄。
+                  </p>
+                  {loadingSignals ? (
+                    <EmptyText text="正在讀取 Signal..." />
+                  ) : signals.length === 0 ? (
+                    <EmptyText text="目前沒有偵測到的 Signal。" />
+                  ) : (
+                    <div className="space-y-3">
+                      {signals.map((signal) => (
+                        <div key={signal.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-sm font-semibold text-slate-900">{signal.title}</div>
+                            <div className="flex items-center gap-2">
+                              <span className={`rounded-full px-2 py-1 text-[10px] font-black ${signalStatusClass(signal.status)}`}>
+                                {signalStatusLabel(signal.status)}
+                              </span>
+                              <span className="rounded-full bg-slate-200 px-2 py-1 text-[10px] font-black text-slate-600">
+                                x{signal.occurrence_count}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mt-2 text-sm text-slate-600">{signal.summary}</div>
+                          <div className="mt-2 text-xs text-slate-400">最近偵測：{formatAnalysisDate(signal.last_seen_at)}</div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {(signal.status === "new" || signal.status === "acknowledged") && !isDemo ? (
+                              <>
+                                {signal.status === "new" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void updateSignalStatus(signal.id, "acknowledged")}
+                                    disabled={signalBusyId === signal.id}
+                                    className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 disabled:opacity-50"
+                                  >
+                                    確認
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => void updateSignalStatus(signal.id, "dismissed")}
+                                  disabled={signalBusyId === signal.id}
+                                  className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-500 disabled:opacity-50"
+                                >
+                                  忽略
+                                </button>
+                              </>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => void toggleSignalAnalysis(signal.id)}
+                              className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700"
+                            >
+                              {expandedSignalId === signal.id ? "收合解讀與影響評估" : "查看解讀與影響評估"}
+                            </button>
+                          </div>
+
+                          {expandedSignalId === signal.id ? (
+                            <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+                              {loadingAnalysisId === signal.id ? (
+                                <EmptyText text="正在讀取 Explanation/Business Impact..." />
+                              ) : !analysisById[signal.id] ? (
+                                <EmptyText text="讀取失敗，請稍後再試。" />
+                              ) : (
+                                <>
+                                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Evidence</p>
+                                    <p className="mt-1 text-sm text-slate-700">
+                                      引用 {analysisById[signal.id].evidence_ids.length} 筆 Evidence（ID：
+                                      {analysisById[signal.id].evidence_ids.join(", ") || "無"}）
+                                    </p>
+                                  </div>
+                                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                                    <p className="text-[10px] font-black uppercase tracking-wide text-blue-500">Explanation</p>
+                                    {analysisById[signal.id].status === "insufficient_evidence" ? (
+                                      <p className="mt-1 text-sm text-blue-900">尚無足夠 Evidence，無法產生解讀。</p>
+                                    ) : analysisById[signal.id].status === "failed" ? (
+                                      <p className="mt-1 text-sm text-rose-700">產生解讀時發生錯誤，未產生結果。</p>
+                                    ) : (
+                                      <>
+                                        <p className="mt-1 text-sm text-blue-900">{analysisById[signal.id].explanation.text}</p>
+                                        <p className="mt-1 text-xs text-blue-600">
+                                          信心度：{analysisById[signal.id].explanation.confidence ?? "-"}％ ·{" "}
+                                          {generatorLabel(analysisById[signal.id].generator)}
+                                        </p>
+                                      </>
+                                    )}
+                                  </div>
+                                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                                    <p className="text-[10px] font-black uppercase tracking-wide text-amber-600">Business Impact</p>
+                                    {analysisById[signal.id].status !== "ok" ? (
+                                      <p className="mt-1 text-sm text-amber-900">尚無法判斷商業影響。</p>
+                                    ) : (
+                                      <>
+                                        <p className="mt-1 text-sm font-bold text-amber-900">
+                                          {impactDirectionLabel(analysisById[signal.id].business_impact.direction)}
+                                          {analysisById[signal.id].business_impact.magnitude
+                                            ? `（${analysisById[signal.id].business_impact.magnitude}）`
+                                            : ""}
+                                        </p>
+                                        <p className="mt-1 text-xs text-amber-700">{analysisById[signal.id].business_impact.basis}</p>
+                                        <p className="mt-1 text-xs text-amber-600">
+                                          限制：{analysisById[signal.id].business_impact.limitations}
+                                        </p>
+                                      </>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </InfoCard>
 
                 <InfoCard title="技術問題與修復任務">
                   {summary.technicalIssues.length === 0 ? (

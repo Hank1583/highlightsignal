@@ -28,18 +28,23 @@ function si_create_summary_payload(array $body, $forcedModule = null)
     }
 
     $conn = si_db();
+    $workspaceId = si_resolve_workspace_id($userId);
     $conn->begin_transaction();
 
     try {
+        if ($workspaceId <= 0) {
+            throw new RuntimeException('WORKSPACE_NOT_FOUND');
+        }
+
         $siteStmt = $conn->prepare(
-            'SELECT id FROM si_sites WHERE id = ? AND user_id = ? AND is_active = 1'
+            'SELECT id FROM si_sites WHERE id = ? AND user_id = ? AND workspace_id = ? AND is_active = 1'
         );
 
         if (!$siteStmt) {
             throw new RuntimeException($conn->error);
         }
 
-        $siteStmt->bind_param('ii', $siteId, $userId);
+        $siteStmt->bind_param('iii', $siteId, $userId, $workspaceId);
         $siteStmt->execute();
 
         if (!$siteStmt->get_result()->fetch_assoc()) {
@@ -55,8 +60,8 @@ function si_create_summary_payload(array $body, $forcedModule = null)
 
         $stmt = $conn->prepare(
             'INSERT INTO si_analysis_runs
-             (user_id, site_id, module, tab_key, title, description, panel_title, side_title, recommendation, source, status, analyzed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+             (user_id, workspace_id, site_id, module, tab_key, title, description, panel_title, side_title, recommendation, source, status, analyzed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
         );
 
         if (!$stmt) {
@@ -64,8 +69,9 @@ function si_create_summary_payload(array $body, $forcedModule = null)
         }
 
         $stmt->bind_param(
-            'iisssssssss',
+            'iiisssssssss',
             $userId,
+            $workspaceId,
             $siteId,
             $module,
             $tabKey,
@@ -98,6 +104,10 @@ function si_create_summary_payload(array $body, $forcedModule = null)
 
         if ($error instanceof RuntimeException && $error->getMessage() === 'SITE_NOT_FOUND') {
             si_fail('SITE_NOT_FOUND', 'Site not found.', 404);
+        }
+
+        if ($error instanceof RuntimeException && $error->getMessage() === 'WORKSPACE_NOT_FOUND') {
+            si_fail('WORKSPACE_NOT_FOUND', 'No Workspace mapping for this member.', 409);
         }
 
         si_fail('SAVE_FAILED', $error->getMessage(), 500);

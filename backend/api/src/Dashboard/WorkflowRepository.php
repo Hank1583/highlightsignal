@@ -49,27 +49,210 @@ final class WorkflowRepository
         return $this->findRecommendation($workspaceId, $contextKey);
     }
 
-    public function recordDecision(int $workspaceId, int $recommendationId, int $memberId, string $decision)
+    /**
+     * V10-04: signal-backed path. Unlike saveRecommendation() (legacy,
+     * trusts whatever title/description the frontend sent), every content
+     * field here is derived by WorkflowService from a real Signal/Evidence/
+     * Explanation chain -- this method's only job is comparing against the
+     * existing row to decide whether `revision` actually needs to bump.
+     * A repeat call with byte-identical content is a no-op on `revision`
+     * (idempotency: same underlying Signal state in, same result out, not a
+     * new version every time a human re-opens the same task).
+     *
+     * @param array<string, mixed> $content title/priority/confidence/expected_impact/suggested_action/reason/description
+     */
+    public function saveFormalizedRecommendation(int $workspaceId, string $contextKey, int $signalId, array $content): array
     {
+        $existing = $this->findRecommendation($workspaceId, $contextKey);
+        $title = (string) $content['title'];
+        $priority = (string) $content['priority'];
+        $confidence = (float) $content['confidence'];
+        $expectedImpact = (string) $content['expected_impact'];
+        $suggestedAction = (string) $content['suggested_action'];
+        $reason = (string) $content['reason'];
+        $description = (string) $content['description'];
+        $status = isset($content['status']) ? (string) $content['status'] : null;
+
+        if (is_array($existing)) {
+            $unchanged = (int) $existing['signal_id'] === $signalId
+                && (string) $existing['title'] === $title
+                && (string) $existing['priority'] === $priority
+                && (string) $existing['expected_impact'] === $expectedImpact
+                && (string) $existing['suggested_action'] === $suggestedAction
+                && (string) $existing['reason'] === $reason;
+
+            $revision = $unchanged ? (int) $existing['revision'] : (int) $existing['revision'] + 1;
+            $nextStatus = $status !== null ? $status : (string) $existing['status'];
+
+            $statement = $this->database->prepare(
+                'UPDATE recommendations SET
+                    signal_id = ?, title = ?, description = ?, priority = ?, confidence = ?,
+                    expected_impact = ?, suggested_action = ?, reason = ?,
+                    generator_type = ?, generator_version = ?, revision = ?, status = ?
+                 WHERE id = ? AND workspace_id = ?'
+            );
+            $generatorType = 'backend_rule';
+            $generatorVersion = (string) $content['generator_version'];
+            $id = (int) $existing['id'];
+            $statement->bind_param(
+                'isssdsssssisii',
+                $signalId,
+                $title,
+                $description,
+                $priority,
+                $confidence,
+                $expectedImpact,
+                $suggestedAction,
+                $reason,
+                $generatorType,
+                $generatorVersion,
+                $revision,
+                $nextStatus,
+                $id,
+                $workspaceId
+            );
+            $statement->execute();
+            return $this->findRecommendation($workspaceId, $contextKey);
+        }
+
+        $publicId = $this->uuid();
+        $generatorType = 'backend_rule';
+        $generatorVersion = (string) $content['generator_version'];
+        $statement = $this->database->prepare(
+            "INSERT INTO recommendations (
+                public_id, workspace_id, context_key, signal_id, source, title, description,
+                priority, confidence, expected_impact, suggested_action, reason,
+                generator_type, generator_version, revision
+            ) VALUES (?, ?, ?, ?, 'signal', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"
+        );
+        $statement->bind_param(
+            'sisisssdsssss',
+            $publicId,
+            $workspaceId,
+            $contextKey,
+            $signalId,
+            $title,
+            $description,
+            $priority,
+            $confidence,
+            $expectedImpact,
+            $suggestedAction,
+            $reason,
+            $generatorType,
+            $generatorVersion
+        );
+        $statement->execute();
+        return $this->findRecommendation($workspaceId, $contextKey);
+    }
+
+    /** V10-04: called from WorkflowService::get() when a signal-backed Recommendation's Signal has resolved/dismissed. */
+    public function archiveRecommendation(int $workspaceId, int $recommendationId): void
+    {
+        $statement = $this->database->prepare(
+            "UPDATE recommendations SET status = 'archived' WHERE id = ? AND workspace_id = ?"
+        );
+        $statement->bind_param('ii', $recommendationId, $workspaceId);
+        $statement->execute();
+    }
+
+    /**
+     * V10-05: `decisions` was already append-only (always INSERT, never
+     * UPDATE an existing row) before this task -- that part is unchanged.
+     * What's new: the wider outcome vocabulary (migrations/028), reason/
+     * expected_outcome/recommendation_revision capture, and opt-in
+     * idempotency.
+     *
+     * `recommendations.status` (a small ENUM: pending/accepted/skipped/
+     * archived, migrations/011) is a DIFFERENT vocabulary than
+     * `decisions.decision` (the full 6-value outcome set) -- it was always
+     * a simplified lifecycle flag, not a mirror of the decision. Mapping a
+     * new decision value directly into that column would either be an
+     * invalid ENUM value or silently misrepresent the outcome, so this maps
+     * explicitly: accepted->accepted, modified->accepted (still moving
+     * forward, just with changes), skipped/rejected->skipped (declined),
+     * deferred/needs_more_evidence->pending (still open, not finally
+     * decided).
+     *
+     * $reason/$recommendationRevision/$expectedOutcome/$idempotencyKey have
+     * no type hints (not `?string`) -- nullable parameter type declarations
+     * are PHP 7.1+ only, and this project targets PHP 7.0.
+     *
+     * @return array<string, mixed> the decision row (existing one, if $idempotencyKey matched a prior submission)
+     */
+    public function recordDecision(
+        int $workspaceId,
+        int $recommendationId,
+        int $memberId,
+        string $decision,
+        $reason = null,
+        $recommendationRevision = null,
+        $expectedOutcome = null,
+        $idempotencyKey = null
+    ): array {
+        if ($idempotencyKey !== null) {
+            $existing = $this->findDecisionByIdempotencyKey($workspaceId, (string) $idempotencyKey);
+            if (is_array($existing)) {
+                return $existing;
+            }
+        }
+
         $publicId = $this->uuid();
         $statement = $this->database->prepare(
-            'INSERT INTO decisions (public_id, workspace_id, recommendation_id, actor_member_id, decision)
-             VALUES (?, ?, ?, ?, ?)'
+            'INSERT INTO decisions (
+                public_id, workspace_id, recommendation_id, recommendation_revision,
+                actor_member_id, decision, note, expected_outcome, idempotency_key
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $statement->bind_param('siiis', $publicId, $workspaceId, $recommendationId, $memberId, $decision);
+        $statement->bind_param(
+            'siiiissss',
+            $publicId,
+            $workspaceId,
+            $recommendationId,
+            $recommendationRevision,
+            $memberId,
+            $decision,
+            $reason,
+            $expectedOutcome,
+            $idempotencyKey
+        );
         $statement->execute();
 
+        $statusMap = array(
+            'accepted' => 'accepted',
+            'modified' => 'accepted',
+            'skipped' => 'skipped',
+            'rejected' => 'skipped',
+            'deferred' => 'pending',
+            'needs_more_evidence' => 'pending',
+        );
+        $recommendationStatus = isset($statusMap[$decision]) ? $statusMap[$decision] : 'pending';
         $update = $this->database->prepare(
             'UPDATE recommendations SET status = ? WHERE id = ? AND workspace_id = ?'
         );
-        $update->bind_param('sii', $decision, $recommendationId, $workspaceId);
+        $update->bind_param('sii', $recommendationStatus, $recommendationId, $workspaceId);
         $update->execute();
+
+        return $this->latestDecision($workspaceId, $recommendationId);
+    }
+
+    public function findDecisionByIdempotencyKey(int $workspaceId, string $idempotencyKey)
+    {
+        $statement = $this->database->prepare(
+            'SELECT public_id, decision, actor_member_id, note, expected_outcome,
+                    recommendation_revision, idempotency_key, created_at
+             FROM decisions WHERE workspace_id = ? AND idempotency_key = ? LIMIT 1'
+        );
+        $statement->bind_param('is', $workspaceId, $idempotencyKey);
+        $statement->execute();
+        $row = $statement->get_result()->fetch_assoc();
+        return is_array($row) ? $row : null;
     }
 
     public function latestDecision(int $workspaceId, int $recommendationId)
     {
         $statement = $this->database->prepare(
-            'SELECT public_id, decision, actor_member_id, note, created_at
+            'SELECT public_id, decision, actor_member_id, note, expected_outcome,
+                    recommendation_revision, idempotency_key, created_at
              FROM decisions WHERE workspace_id = ? AND recommendation_id = ?
              ORDER BY id DESC LIMIT 1'
         );

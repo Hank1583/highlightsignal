@@ -1,9 +1,22 @@
 # Task Packet — V09-02 Workspace Backfill
 
-Status: WAITING_FOR_V09-01  
+Status: DONE（資料完整性）／部分待驗證 — 2026-07-20 於真實 pre-launch host 完成驗證
 Milestone: V0.9 Workspace Foundation  
-Dependency: `V09-01`  
+Dependency: `V09-01`（同一批次完成）  
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`
+Evidence: `backend/api/src/Workspace/WorkspaceProvisioningService.php`、
+`backend/sql/migrations/014_workspace_owner_backfill.sql`、
+2026-07-20 postflight 結果：`unmapped_count=0`、
+`workspaces_without_owner_membership=0`、`orphaned_legacy_mappings=0`
+（見 tracker 2026-07-20 條目）
+Known gap（未驗證，非資料完整性問題）：
+1. ~~移除 lazy-GET 後，尚無呼叫方會呼叫新的 `POST /api/v1/workspaces`~~ ——已由
+   `V09-06`（2026-07-21）解決：`WorkspaceProvider.tsx` 於 GET 回傳空陣列時明確
+   呼叫 POST 觸發 provisioning。該呼叫路徑本身尚未用真實「從未 provisioning
+   過的會員」實測（無對應測試帳號），見
+   `docs/task-packets/V09-06_FRONTEND_WORKSPACE_CONTEXT.md`。
+2. Backfill 重跑冪等性、GET 純讀的即時行為、multi-workspace membership、
+   restore 演練——均為設計上正確但未實測，資料量太小或無測試環境可驗證。
 
 ---
 

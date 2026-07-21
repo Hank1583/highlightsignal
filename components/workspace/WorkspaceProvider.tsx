@@ -85,18 +85,48 @@ export default function WorkspaceProvider({
     setErrorMessage("");
 
     try {
-      const response = await fetch("/api/workspaces", {
-        credentials: "include",
-        cache: "no-store",
-      });
-      const payload = await response.json();
-      const loaded = Array.isArray(payload?.data)
-        ? payload.data
-            .map(normalizeWorkspace)
-            .filter((item: Workspace | null): item is Workspace => item !== null)
-        : [];
+      const fetchWorkspaceList = async () => {
+        const response = await fetch("/api/workspaces", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const payload = await response.json();
 
-      if (!response.ok || !payload?.ok || loaded.length === 0) {
+        if (!response.ok || !payload?.ok) {
+          throw new Error("Workspace backend is not ready");
+        }
+
+        return Array.isArray(payload.data)
+          ? payload.data
+              .map(normalizeWorkspace)
+              .filter((item: Workspace | null): item is Workspace => item !== null)
+          : [];
+      };
+
+      let loaded = await fetchWorkspaceList();
+
+      if (loaded.length === 0) {
+        // V09-02 known gap #2: a brand-new member has no Workspace yet, and the
+        // backend no longer creates one as a side effect of listing. Provision
+        // it explicitly, then re-read the list.
+        const provisionResponse = await fetch("/api/workspaces", {
+          method: "POST",
+          credentials: "include",
+        });
+        const provisionPayload = await provisionResponse.json().catch(() => null);
+        const alreadyProvisioned =
+          provisionPayload?.error?.code === "WORKSPACE_ALREADY_PROVISIONED";
+
+        if (!provisionResponse.ok && !alreadyProvisioned) {
+          throw new Error(
+            provisionPayload?.error?.message || "Workspace provisioning failed"
+          );
+        }
+
+        loaded = await fetchWorkspaceList();
+      }
+
+      if (loaded.length === 0) {
         throw new Error("Workspace backend is not ready");
       }
 

@@ -240,7 +240,7 @@ function run_google_pagespeed($url, $strategy)
   ];
 }
 
-function save_pagespeed_row($conn, $user_id, $site_id, $data)
+function save_pagespeed_row($conn, $user_id, $site_id, $workspace_id, $data)
 {
   $metricsJson = json_encode($data["metrics"], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   if ($metricsJson === false) {
@@ -249,8 +249,8 @@ function save_pagespeed_row($conn, $user_id, $site_id, $data)
 
   $stmt = $conn->prepare("
     INSERT INTO seo_pagespeed_cache
-      (user_id, site_id, strategy, url, score, status, metrics_json, fetched_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (user_id, site_id, workspace_id, strategy, url, score, status, metrics_json, fetched_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
       url = VALUES(url),
       score = VALUES(score),
@@ -270,9 +270,10 @@ function save_pagespeed_row($conn, $user_id, $site_id, $data)
   $rowStatus = $data["status"];
   $rowFetchedAt = $data["fetchedAt"];
   $stmt->bind_param(
-    "iississs",
+    "iiississs",
     $user_id,
     $site_id,
+    $workspace_id,
     $rowStrategy,
     $rowUrl,
     $score,
@@ -282,7 +283,7 @@ function save_pagespeed_row($conn, $user_id, $site_id, $data)
   );
   $stmt->execute();
 
-  save_pagespeed_history_row($conn, $user_id, $site_id, $data);
+  save_pagespeed_history_row($conn, $user_id, $site_id, $workspace_id, $data);
 }
 
 function page_row($row)
@@ -305,59 +306,21 @@ function page_row($row)
 
 function ensure_pagespeed_table($conn)
 {
-  $sql = "
-    CREATE TABLE IF NOT EXISTS seo_pagespeed_cache (
-      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-      user_id BIGINT UNSIGNED NOT NULL,
-      site_id BIGINT UNSIGNED NOT NULL,
-      strategy ENUM('mobile', 'desktop') NOT NULL,
-      url VARCHAR(500) NOT NULL,
-      score TINYINT UNSIGNED NULL,
-      status VARCHAR(20) NOT NULL DEFAULT 'unknown',
-      metrics_json LONGTEXT NOT NULL,
-      fetched_at DATETIME NOT NULL,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      UNIQUE KEY uk_seo_pagespeed_lookup (user_id, site_id, strategy),
-      KEY idx_seo_pagespeed_site_id (site_id),
-      KEY idx_seo_pagespeed_fetched_at (fetched_at)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  ";
-
-  if (!$conn->query($sql)) {
-    pagespeed_fail($conn->error, "TABLE_CREATE_FAILED", 500);
-  }
+  // seo_pagespeed_cache is provisioned by backend/sql/migrations/013_runtime_ddl_extraction.sql;
+  // this is intentionally a no-op so callers can keep calling it defensively.
 }
 
 function ensure_pagespeed_history_table($conn)
 {
-  $sql = "
-    CREATE TABLE IF NOT EXISTS seo_pagespeed_history (
-      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-      user_id BIGINT UNSIGNED NOT NULL,
-      site_id BIGINT UNSIGNED NOT NULL,
-      strategy ENUM('mobile', 'desktop') NOT NULL,
-      url VARCHAR(500) NOT NULL,
-      score TINYINT UNSIGNED NULL,
-      status VARCHAR(20) NOT NULL DEFAULT 'unknown',
-      metrics_json LONGTEXT NOT NULL,
-      fetched_at DATETIME NOT NULL,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      KEY idx_seo_pagespeed_history_lookup (user_id, site_id, strategy, fetched_at),
-      KEY idx_seo_pagespeed_history_site_id (site_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  ";
-
-  if (!$conn->query($sql)) {
-    pagespeed_fail($conn->error, "HISTORY_TABLE_CREATE_FAILED", 500);
-  }
+  // seo_pagespeed_history is provisioned by backend/sql/migrations/013_runtime_ddl_extraction.sql.
+  // The table-create step is intentionally gone; the dedup backfill copy below still runs.
+  // workspace_id is copied straight from the cache row (V09-04) so the dedup
+  // backfill doesn't leave history rows one migration behind the cache table.
 
   $conn->query("
     INSERT INTO seo_pagespeed_history
-      (user_id, site_id, strategy, url, score, status, metrics_json, fetched_at)
-    SELECT c.user_id, c.site_id, c.strategy, c.url, c.score, c.status, c.metrics_json, c.fetched_at
+      (user_id, site_id, workspace_id, strategy, url, score, status, metrics_json, fetched_at)
+    SELECT c.user_id, c.site_id, c.workspace_id, c.strategy, c.url, c.score, c.status, c.metrics_json, c.fetched_at
     FROM seo_pagespeed_cache c
     WHERE NOT EXISTS (
       SELECT 1
@@ -369,7 +332,7 @@ function ensure_pagespeed_history_table($conn)
   ");
 }
 
-function save_pagespeed_history_row($conn, $user_id, $site_id, $data)
+function save_pagespeed_history_row($conn, $user_id, $site_id, $workspace_id, $data)
 {
   $metricsJson = json_encode($data["metrics"], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   if ($metricsJson === false) {
@@ -378,8 +341,8 @@ function save_pagespeed_history_row($conn, $user_id, $site_id, $data)
 
   $stmt = $conn->prepare("
     INSERT INTO seo_pagespeed_history
-      (user_id, site_id, strategy, url, score, status, metrics_json, fetched_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (user_id, site_id, workspace_id, strategy, url, score, status, metrics_json, fetched_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   ");
 
   if (!$stmt) {
@@ -392,9 +355,10 @@ function save_pagespeed_history_row($conn, $user_id, $site_id, $data)
   $rowStatus = $data["status"];
   $rowFetchedAt = $data["fetchedAt"];
   $stmt->bind_param(
-    "iississs",
+    "iiississs",
     $user_id,
     $site_id,
+    $workspace_id,
     $rowStrategy,
     $rowUrl,
     $rowScore,
@@ -420,13 +384,19 @@ if (!$user_id || !$site_id) {
   pagespeed_fail("user_id or site_id missing", "MISSING_PARAMS");
 }
 
+// V09-04: scope by workspace_id (resolved server-side, not the signed
+// x-hs-workspace-id header -- see legacy_auth.php's
+// hs_resolve_member_workspace_id() for why) in addition to the existing
+// user_id check.
+$workspace_id = hs_resolve_member_workspace_id($conn, $user_id);
+
 ensure_pagespeed_table($conn);
 ensure_pagespeed_history_table($conn);
 
 $siteStmt = $conn->prepare("
   SELECT id, site_url
   FROM seo_sites
-  WHERE id = ? AND user_id = ?
+  WHERE id = ? AND user_id = ? AND workspace_id = ?
   LIMIT 1
 ");
 
@@ -434,7 +404,7 @@ if (!$siteStmt) {
   pagespeed_fail($conn->error, "SQL_PREPARE_FAILED", 500);
 }
 
-$siteStmt->bind_param("ii", $site_id, $user_id);
+$siteStmt->bind_param("iii", $site_id, $user_id, $workspace_id);
 $siteStmt->execute();
 $site = $siteStmt->get_result()->fetch_assoc();
 
@@ -446,7 +416,7 @@ if ($action === "latest") {
   $stmt = $conn->prepare("
     SELECT url, strategy, score, status, metrics_json, fetched_at
     FROM seo_pagespeed_cache
-    WHERE user_id = ? AND site_id = ? AND strategy = ?
+    WHERE user_id = ? AND site_id = ? AND workspace_id = ? AND strategy = ?
     LIMIT 1
   ");
 
@@ -454,7 +424,7 @@ if ($action === "latest") {
     pagespeed_fail($conn->error, "SQL_PREPARE_FAILED", 500);
   }
 
-  $stmt->bind_param("iis", $user_id, $site_id, $strategy);
+  $stmt->bind_param("iiis", $user_id, $site_id, $workspace_id, $strategy);
   $stmt->execute();
   $row = $stmt->get_result()->fetch_assoc();
 
@@ -466,7 +436,7 @@ if ($action === "history") {
   $stmt = $conn->prepare("
     SELECT url, strategy, score, status, metrics_json, fetched_at
     FROM seo_pagespeed_history
-    WHERE user_id = ? AND site_id = ? AND strategy = ?
+    WHERE user_id = ? AND site_id = ? AND workspace_id = ? AND strategy = ?
     ORDER BY fetched_at DESC, id DESC
     LIMIT ?
   ");
@@ -475,7 +445,7 @@ if ($action === "history") {
     pagespeed_fail($conn->error, "SQL_PREPARE_FAILED", 500);
   }
 
-  $stmt->bind_param("iisi", $user_id, $site_id, $strategy, $limit);
+  $stmt->bind_param("iiisi", $user_id, $site_id, $workspace_id, $strategy, $limit);
   $stmt->execute();
   $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
   pagespeed_success(array_map("page_row", $rows));
@@ -492,7 +462,7 @@ if ($action === "run") {
   }
 
   $data = run_google_pagespeed($url, $strategy);
-  save_pagespeed_row($conn, $user_id, $site_id, $data);
+  save_pagespeed_row($conn, $user_id, $site_id, $workspace_id, $data);
   pagespeed_success($data);
 }
 
@@ -517,8 +487,8 @@ if ($metricsJson === false) {
 
 $stmt = $conn->prepare("
   INSERT INTO seo_pagespeed_cache
-    (user_id, site_id, strategy, url, score, status, metrics_json, fetched_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    (user_id, site_id, workspace_id, strategy, url, score, status, metrics_json, fetched_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON DUPLICATE KEY UPDATE
     url = VALUES(url),
     score = VALUES(score),
@@ -533,9 +503,10 @@ if (!$stmt) {
 }
 
 $stmt->bind_param(
-  "iississs",
+  "iiississs",
   $user_id,
   $site_id,
+  $workspace_id,
   $strategy,
   $url,
   $score,
@@ -545,7 +516,7 @@ $stmt->bind_param(
 );
 $stmt->execute();
 
-save_pagespeed_history_row($conn, $user_id, $site_id, [
+save_pagespeed_history_row($conn, $user_id, $site_id, $workspace_id, [
   "url" => $url,
   "strategy" => $strategy,
   "score" => $score,

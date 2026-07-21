@@ -23,6 +23,12 @@ if (!$user_id) {
   exit;
 }
 
+// V09-04: scope by workspace_id (resolved server-side, not the signed
+// x-hs-workspace-id header -- see legacy_auth.php's
+// hs_resolve_member_workspace_id() for why) in addition to the existing
+// user_id check.
+$workspace_id = hs_resolve_member_workspace_id($conn, $user_id);
+
 /*
  * ⚠️ 請確認 table / column 名稱
  * 下面假設與 add.php 一致
@@ -33,7 +39,7 @@ $stmt = $conn->prepare("
     site_name,
     site_url
   FROM seo_sites
-  WHERE user_id = ?
+  WHERE user_id = ? AND workspace_id = ?
   ORDER BY id DESC
 ");
 
@@ -46,7 +52,7 @@ if ($stmt === false) {
   exit;
 }
 
-$stmt->bind_param("i", $user_id);
+$stmt->bind_param("ii", $user_id, $workspace_id);
 $stmt->execute();
 
 $result = $stmt->get_result();

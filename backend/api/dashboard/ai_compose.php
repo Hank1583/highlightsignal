@@ -518,26 +518,11 @@ function dashboard_ai_compose(string $question, array $context)
 
 function dashboard_ensure_log_table(mysqli $conn)
 {
-    $sql = "CREATE TABLE IF NOT EXISTS dashboard_ai_logs (
-        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-        user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
-        question TEXT NOT NULL,
-        lens VARCHAR(40) NOT NULL DEFAULT 'overview',
-        context_json LONGTEXT NULL,
-        response_json LONGTEXT NULL,
-        model VARCHAR(80) NULL,
-        status VARCHAR(30) NOT NULL DEFAULT 'success',
-        error_message TEXT NULL,
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
-        KEY idx_dashboard_ai_logs_user_created (user_id, created_at),
-        KEY idx_dashboard_ai_logs_lens (lens)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-
-    $conn->query($sql);
+    // dashboard_ai_logs is provisioned by backend/sql/migrations/013_runtime_ddl_extraction.sql;
+    // this is intentionally a no-op so callers can keep calling it defensively.
 }
 
-function dashboard_get_cached_response(mysqli $conn, int $userId, string $question, array $context)
+function dashboard_get_cached_response(mysqli $conn, int $userId, int $workspaceId, string $question, array $context)
 {
     dashboard_ensure_log_table($conn);
     $contextJson = json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -546,6 +531,7 @@ function dashboard_get_cached_response(mysqli $conn, int $userId, string $questi
         "SELECT response_json, model, created_at
          FROM dashboard_ai_logs
          WHERE user_id = ?
+           AND workspace_id = ?
            AND question = ?
            AND context_json = ?
            AND status = 'success'
@@ -559,7 +545,7 @@ function dashboard_get_cached_response(mysqli $conn, int $userId, string $questi
         return null;
     }
 
-    $stmt->bind_param('iss', $userId, $question, $contextJson);
+    $stmt->bind_param('iiss', $userId, $workspaceId, $question, $contextJson);
     $stmt->execute();
     $result = $stmt->get_result();
     $row = $result ? $result->fetch_assoc() : null;
@@ -581,7 +567,7 @@ function dashboard_get_cached_response(mysqli $conn, int $userId, string $questi
     return $response;
 }
 
-function dashboard_log(mysqli $conn, int $userId, string $question, array $context, array $response, string $status, string $error = '')
+function dashboard_log(mysqli $conn, int $userId, int $workspaceId, string $question, array $context, array $response, string $status, string $error = '')
 {
     dashboard_ensure_log_table($conn);
 
@@ -592,20 +578,23 @@ function dashboard_log(mysqli $conn, int $userId, string $question, array $conte
 
     $stmt = $conn->prepare(
         'INSERT INTO dashboard_ai_logs
-         (user_id, question, lens, context_json, response_json, model, status, error_message)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+         (user_id, workspace_id, question, lens, context_json, response_json, model, status, error_message)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
     if (!$stmt) {
         return;
     }
 
-    $stmt->bind_param('isssssss', $userId, $question, $lens, $contextJson, $responseJson, $model, $status, $error);
+    $stmt->bind_param('iisssssss', $userId, $workspaceId, $question, $lens, $contextJson, $responseJson, $model, $status, $error);
     $stmt->execute();
 }
 
 $input = hs_input();
 $user = hs_request_user($input);
+// V09-04: resolved server-side, not the signed x-hs-workspace-id header --
+// see legacy_auth.php's hs_resolve_member_workspace_id() for why.
+$workspaceId = hs_member_workspace_id((int)$user['id']);
 $question = trim((string)($input['question'] ?? ''));
 $context = is_array($input['context'] ?? null) ? $input['context'] : [];
 
@@ -614,7 +603,7 @@ if ($question === '') {
 }
 
 $conn = dashboard_db();
-$cachedResponse = dashboard_get_cached_response($conn, (int)$user['id'], $question, $context);
+$cachedResponse = dashboard_get_cached_response($conn, (int)$user['id'], $workspaceId, $question, $context);
 
 if ($cachedResponse) {
     hs_json($cachedResponse);
@@ -640,6 +629,6 @@ $response = [
     'blocks' => $aiResult['blocks'] ?? [],
 ];
 
-dashboard_log($conn, (int)$user['id'], $question, $context, $response, 'success');
+dashboard_log($conn, (int)$user['id'], $workspaceId, $question, $context, $response, 'success');
 
 hs_json($response);

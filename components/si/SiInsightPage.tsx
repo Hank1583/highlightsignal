@@ -273,6 +273,16 @@ export default function SiInsightPage({ module, eyebrow, emptyTitle, iconMode }:
   }, []);
 
   useEffect(() => {
+    // Clear the previous Workspace's sites/summary/history immediately on
+    // switch so stale content isn't shown while the new Workspace's sites and
+    // analysis reload.
+    setSites([]);
+    setSummary(null);
+    setHistory([]);
+    setErrorText("");
+  }, [workspaceId]);
+
+  useEffect(() => {
     loadSites();
   }, [loadSites]);
 

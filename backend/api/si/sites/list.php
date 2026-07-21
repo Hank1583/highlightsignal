@@ -7,13 +7,14 @@ require_once __DIR__ . '/../common.php';
 $body = si_input();
 $userId = si_positive_int($body, 'user_id');
 $conn = si_db();
+$workspaceId = si_resolve_workspace_id($userId);
 $sites = [];
 $seen = [];
 
 $stmt = $conn->prepare(
     'SELECT id, site_name, site_url
      FROM si_sites
-     WHERE user_id = ? AND is_active = 1
+     WHERE user_id = ? AND workspace_id = ? AND is_active = 1
      ORDER BY id DESC'
 );
 
@@ -21,7 +22,7 @@ if (!$stmt) {
     si_fail('SQL_PREPARE_FAILED', $conn->error, 500);
 }
 
-$stmt->bind_param('i', $userId);
+$stmt->bind_param('ii', $userId, $workspaceId);
 $stmt->execute();
 $result = $stmt->get_result();
 
@@ -39,12 +40,12 @@ if (si_table_exists_for_sites('seo_sites')) {
     $seoStmt = $conn->prepare(
         'SELECT id, site_name, site_url
          FROM seo_sites
-         WHERE user_id = ?
+         WHERE user_id = ? AND workspace_id = ?
          ORDER BY id DESC'
     );
 
     if ($seoStmt) {
-        $seoStmt->bind_param('i', $userId);
+        $seoStmt->bind_param('ii', $userId, $workspaceId);
         $seoStmt->execute();
         $seoResult = $seoStmt->get_result();
 

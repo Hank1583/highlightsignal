@@ -58,6 +58,12 @@ export default function GaPage() {
   } = useGAConnections();
 
   useEffect(() => {
+    // A previous Workspace's connection ids must never carry over into the
+    // active-ids query for the newly selected Workspace.
+    setSelectedIds([]);
+  }, [currentWorkspace.id]);
+
+  useEffect(() => {
     if (gaConnections.length > 0 && selectedIds.length === 0) {
       setSelectedIds(gaConnections.map((item) => item.id));
     }

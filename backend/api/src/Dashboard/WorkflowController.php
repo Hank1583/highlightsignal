@@ -7,7 +7,7 @@ namespace HighlightSignal\Dashboard;
 use HighlightSignal\Auth\ServiceIdentity;
 use HighlightSignal\Http\Request;
 use HighlightSignal\Http\ValidationException;
-use HighlightSignal\Workspace\AuthorizationException;
+use HighlightSignal\Workspace\WorkspacePermissions;
 
 final class WorkflowController
 {
@@ -32,9 +32,7 @@ final class WorkflowController
     public function update(Request $request, array $parameters): array
     {
         $this->requireMatchingWorkspace($parameters);
-        if (!in_array($this->membership['role'], array('owner', 'admin', 'manager', 'member'), true)) {
-            throw new AuthorizationException('Workspace role cannot change decisions or tasks.');
-        }
+        WorkspacePermissions::requirePermission($this->membership, 'workflow.mutate');
         $input = $request->json();
         $contextKey = $this->contextKey((string) ($input['context_key'] ?? ''));
         return array('ok' => true, 'data' => $this->service->mutate($this->identity, $contextKey, $input));

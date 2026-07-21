@@ -15,11 +15,10 @@ final class WorkspaceService
 
     public function listForMember(int $memberId): array
     {
-        $workspaces = $this->repository->listForMember($memberId);
-        if (count($workspaces) === 0) {
-            $this->repository->ensureDefaultForMember($memberId);
-            $workspaces = $this->repository->listForMember($memberId);
-        }
-        return $workspaces;
+        // Read-only by design (V09-02): an empty result is just empty. Provisioning a
+        // member's first Workspace happens explicitly via
+        // WorkspaceProvisioningService::provisionDefaultForNewMember(), never as a
+        // side effect of listing.
+        return $this->repository->listForMember($memberId);
     }
 }

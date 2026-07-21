@@ -43,6 +43,15 @@ function hs_request_user($input = []) {
   ];
 }
 
+// V09-04: resolves the dashboard_ai_logs/dashboard_ai_plan_logs Workspace
+// scope for an already-verified member id. See legacy_auth.php's
+// hs_resolve_member_workspace_id() for why this does not trust the signed
+// x-hs-workspace-id header for these endpoints.
+function hs_member_workspace_id($memberId) {
+  global $conn;
+  return hs_resolve_member_workspace_id($conn, (int)$memberId);
+}
+
 function hs_table_exists($conn, $table) {
   $stmt = $conn->prepare('SELECT COUNT(*) AS total FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
   if (!$stmt) return false;

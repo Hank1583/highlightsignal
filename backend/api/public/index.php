@@ -14,12 +14,23 @@ use HighlightSignal\Http\NotFoundException;
 use HighlightSignal\Http\Request;
 use HighlightSignal\Http\Router;
 use HighlightSignal\Http\ValidationException;
+use HighlightSignal\Evidence\EvidenceController;
+use HighlightSignal\Evidence\EvidenceRepository;
+use HighlightSignal\Evidence\EvidenceService;
+use HighlightSignal\Explanation\ExplanationController;
+use HighlightSignal\Explanation\ExplanationRepository;
+use HighlightSignal\Explanation\ExplanationService;
 use HighlightSignal\Integration\GoogleAnalytics\GaIntegrationController;
 use HighlightSignal\Integration\GoogleAnalytics\GaIntegrationRepository;
 use HighlightSignal\Integration\GoogleAnalytics\GaIntegrationService;
+use HighlightSignal\Signal\SignalController;
+use HighlightSignal\Signal\SignalRepository;
+use HighlightSignal\Signal\SignalService;
 use HighlightSignal\Workspace\WorkspaceAccessPolicy;
 use HighlightSignal\Workspace\AuthorizationException;
+use HighlightSignal\Workspace\WorkspaceAlreadyProvisionedException;
 use HighlightSignal\Workspace\WorkspaceController;
+use HighlightSignal\Workspace\WorkspaceProvisioningService;
 use HighlightSignal\Workspace\WorkspaceRepository;
 use HighlightSignal\Workspace\WorkspaceService;
 
@@ -71,8 +82,10 @@ try {
 
     $workspaceRepository = new WorkspaceRepository($database);
     $workspaceService = new WorkspaceService($workspaceRepository);
-    $workspaceController = new WorkspaceController($workspaceService, $identity);
+    $workspaceProvisioningService = new WorkspaceProvisioningService($database);
+    $workspaceController = new WorkspaceController($workspaceService, $identity, $workspaceProvisioningService);
     $router->add('GET', '/api/v1/workspaces', array($workspaceController, 'index'));
+    $router->add('POST', '/api/v1/workspaces', array($workspaceController, 'create'));
 
     if ($request->routePath === '/api/v1/workspaces') {
         $workspaceResponse = $router->dispatch($request);
@@ -113,8 +126,45 @@ try {
         array($gaController, 'update')
     );
 
+    $signalRepository = new SignalRepository($database);
+    $signalService = new SignalService($database, $signalRepository);
+    $signalController = new SignalController($signalService, $identity, $membership);
+    $router->add(
+        'GET',
+        '/api/v1/workspaces/{workspaceId}/signals',
+        array($signalController, 'index')
+    );
+    $router->add(
+        'PATCH',
+        '/api/v1/workspaces/{workspaceId}/signals/{signalId}',
+        array($signalController, 'update')
+    );
+
+    $evidenceRepository = new EvidenceRepository($database);
+    $evidenceService = new EvidenceService($evidenceRepository, $signalRepository);
+    $evidenceController = new EvidenceController($evidenceService, $identity);
+    $router->add(
+        'GET',
+        '/api/v1/workspaces/{workspaceId}/evidence',
+        array($evidenceController, 'index')
+    );
+    $router->add(
+        'GET',
+        '/api/v1/workspaces/{workspaceId}/signals/{signalId}/evidence',
+        array($evidenceController, 'forSignal')
+    );
+
+    $explanationRepository = new ExplanationRepository($database);
+    $explanationService = new ExplanationService($explanationRepository, $signalRepository, $evidenceRepository);
+    $explanationController = new ExplanationController($explanationService, $identity);
+    $router->add(
+        'GET',
+        '/api/v1/workspaces/{workspaceId}/signals/{signalId}/analysis',
+        array($explanationController, 'forSignal')
+    );
+
     $workflowRepository = new WorkflowRepository($database);
-    $workflowService = new WorkflowService($database, $workflowRepository);
+    $workflowService = new WorkflowService($database, $workflowRepository, $signalRepository, $evidenceRepository, $explanationRepository);
     $workflowController = new WorkflowController($workflowService, $identity, $membership);
     $router->add(
         'GET',
@@ -151,6 +201,8 @@ try {
     JsonResponse::error('UNAUTHORIZED', $error->getMessage(), 401);
 } catch (AuthorizationException $error) {
     JsonResponse::error('FORBIDDEN', $error->getMessage(), 403);
+} catch (WorkspaceAlreadyProvisionedException $error) {
+    JsonResponse::error('WORKSPACE_ALREADY_PROVISIONED', $error->getMessage(), 409);
 } catch (RuntimeException $error) {
     error_log($error->getMessage());
     JsonResponse::error('CONFIGURATION_ERROR', 'Backend configuration is incomplete.', 500);

@@ -45,7 +45,13 @@ export function hasActiveHighlightSignalPlan(subscription: unknown, role?: unkno
 
   if (roleId === "admin" || planId === "admin") return true;
 
-  return ["starter", "pro", "business", "demo"].includes(planId);
+  // Real subscription ids carry a billing-cycle suffix (e.g. "starter_month",
+  // presumably "*_year" too) that an exact-match .includes() against the bare
+  // tier name never matches -- every real paying member on a suffixed plan id
+  // was silently denied SI/GA/ADS access. Aligned with the substring check
+  // dashboardAiQuota.ts already uses correctly for the same subscription
+  // field.
+  return ["starter", "pro", "business", "demo"].some((tier) => planId.startsWith(tier));
 }
 
 export function hasSearchIntelligenceAccess(session: {

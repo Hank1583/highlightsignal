@@ -1,0 +1,216 @@
+<?php
+
+declare(strict_types=1);
+
+namespace HighlightSignal\Signal;
+
+use HighlightSignal\Auth\ServiceIdentity;
+use HighlightSignal\Http\NotFoundException;
+use HighlightSignal\Http\ValidationException;
+use HighlightSignal\Signal\Detector\SeoTechnicalIssueDetector;
+use HighlightSignal\Workspace\WorkspacePermissions;
+use mysqli;
+
+/**
+ * V10-01: Signal only answers "what happened" (spec section 6). This class
+ * must never create a Recommendation or Decision, and detection methods here
+ * are system-triggered (called from si/seo/summary.php after a scan, not
+ * behind a human permission check) -- only the human-facing updateStatus()
+ * goes through WorkspacePermissions.
+ */
+final class SignalService
+{
+    /** Human PATCH may only move a Signal into one of these -- 'new' and
+     *  'resolved' are system-controlled states (initial detection / recurrence
+     *  no longer observed), not something a human directly sets. No
+     *  visibility keyword on purpose -- modifiers on class constants are
+     *  PHP 7.1+ only, and this project targets PHP 7.0. */
+    const HUMAN_SETTABLE_STATUSES = array('acknowledged', 'dismissed');
+
+    private $database;
+    private $repository;
+
+    public function __construct(mysqli $database, SignalRepository $repository)
+    {
+        $this->database = $database;
+        $this->repository = $repository;
+    }
+
+    public function listForWorkspace(int $workspaceId, array $filters, int $page, int $perPage): array
+    {
+        $page = max(1, $page);
+        $perPage = max(1, min(100, $perPage));
+        $result = $this->repository->listForWorkspace($workspaceId, $filters, $page, $perPage);
+
+        return array(
+            'items' => array_map(array($this, 'normalize'), $result['items']),
+            'total' => $result['total'],
+            'page' => $page,
+            'per_page' => $perPage,
+        );
+    }
+
+    public function updateStatus(ServiceIdentity $identity, array $membership, int $signalId, string $status): array
+    {
+        WorkspacePermissions::requirePermission($membership, 'workflow.mutate');
+
+        if (!in_array($status, self::HUMAN_SETTABLE_STATUSES, true)) {
+            throw new ValidationException('Signal status must be acknowledged or dismissed.');
+        }
+
+        $existing = $this->repository->findForWorkspace($identity->workspaceId, $signalId);
+        if (!is_array($existing)) {
+            throw new NotFoundException('Signal not found.');
+        }
+
+        $this->database->begin_transaction();
+        try {
+            $this->repository->updateStatus($identity->workspaceId, $signalId, $status);
+            $this->audit(
+                $identity->workspaceId,
+                $identity->memberId,
+                $identity->nonce,
+                'Signal ' . ucfirst($status),
+                (string) $existing['public_id'],
+                array('from_status' => $existing['status'], 'to_status' => $status)
+            );
+            $this->database->commit();
+        } catch (\Throwable $error) {
+            $this->database->rollback();
+            throw $error;
+        }
+
+        $updated = $this->repository->findForWorkspace($identity->workspaceId, $signalId);
+        return $this->normalize($updated);
+    }
+
+    /**
+     * System-triggered: called from si/seo/summary.php right after a new
+     * seo_scan_history row is written (see that file for why -- synchronous,
+     * not a queued job, since V11-02's Queue Worker doesn't exist yet).
+     * No ServiceIdentity/permission check -- this is not a human mutation,
+     * it is the AI/rule-based detection capability the spec explicitly says
+     * does not require Human Review to execute (only a Decision does).
+     *
+     * @param array<int, array<string, mixed>> $currentIssues
+     * @param array<int, array<string, mixed>> $previousIssues
+     * @return array{created: int, reopened: int, bumped: int, resolved: int}
+     */
+    public function runSeoTechnicalIssueDetection(
+        int $workspaceId,
+        int $siteId,
+        array $currentIssues,
+        array $previousIssues
+    ): array {
+        $detector = new SeoTechnicalIssueDetector();
+        $plan = $detector->diff($siteId, $currentIssues, $previousIssues);
+
+        $stats = array('created' => 0, 'reopened' => 0, 'bumped' => 0, 'resolved' => 0);
+
+        foreach ($plan['to_upsert'] as $item) {
+            $result = $this->repository->upsertByDedupKey(
+                $workspaceId,
+                $item['dedup_key'],
+                $item['signal_type'],
+                $item['severity'],
+                $item['source'],
+                $item['source_ref_type'],
+                $item['source_ref_id'],
+                $item['title'],
+                $item['summary']
+            );
+
+            if ($result['was_new']) {
+                $stats['created']++;
+                $this->audit(
+                    $workspaceId,
+                    null,
+                    null,
+                    'Signal Detected',
+                    (string) $result['row']['public_id'],
+                    array('type' => $item['signal_type'], 'source' => $item['source'])
+                );
+            } elseif ($result['was_reopened']) {
+                $stats['reopened']++;
+                $this->audit(
+                    $workspaceId,
+                    null,
+                    null,
+                    'Signal Reopened',
+                    (string) $result['row']['public_id'],
+                    array('type' => $item['signal_type'], 'source' => $item['source'])
+                );
+            } else {
+                $stats['bumped']++;
+            }
+        }
+
+        foreach ($plan['to_resolve'] as $dedupKey) {
+            $existing = $this->repository->findByDedupKey($workspaceId, $dedupKey);
+            if (!is_array($existing)) {
+                continue;
+            }
+            if ($this->repository->markResolvedByDedupKeyIfOpen($workspaceId, $dedupKey)) {
+                $stats['resolved']++;
+                $this->audit(
+                    $workspaceId,
+                    null,
+                    null,
+                    'Signal Auto-Resolved',
+                    (string) $existing['public_id'],
+                    array('source' => 'seo')
+                );
+            }
+        }
+
+        return $stats;
+    }
+
+    private function normalize(array $row): array
+    {
+        return array(
+            'id' => (int) $row['id'],
+            'public_id' => (string) $row['public_id'],
+            'type' => (string) $row['type'],
+            'severity' => (string) $row['severity'],
+            'status' => (string) $row['status'],
+            'source' => (string) $row['source'],
+            'source_ref_type' => $row['source_ref_type'],
+            'source_ref_id' => $row['source_ref_id'] !== null ? (int) $row['source_ref_id'] : null,
+            'title' => (string) $row['title'],
+            'summary' => (string) ($row['summary'] ?? ''),
+            'detected_at' => (string) $row['detected_at'],
+            'last_seen_at' => (string) $row['last_seen_at'],
+            'occurrence_count' => (int) $row['occurrence_count'],
+            'updated_at' => (string) $row['updated_at'],
+        );
+    }
+
+    /** @param mixed $actorMemberId int|null; @param mixed $requestId string|null */
+    private function audit(
+        int $workspaceId,
+        $actorMemberId,
+        $requestId,
+        string $eventType,
+        string $entityId,
+        array $metadata
+    ): void {
+        $entityType = 'Signal';
+        $metadataJson = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $statement = $this->database->prepare(
+            'INSERT INTO audit_logs (workspace_id, actor_member_id, event_type, entity_type, entity_id, request_id, metadata_json)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+        $statement->bind_param(
+            'iisssss',
+            $workspaceId,
+            $actorMemberId,
+            $eventType,
+            $entityType,
+            $entityId,
+            $requestId,
+            $metadataJson
+        );
+        $statement->execute();
+    }
+}

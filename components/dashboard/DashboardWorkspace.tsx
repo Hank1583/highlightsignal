@@ -487,6 +487,15 @@ export default function DashboardWorkspace({ ga, seo, rangeLabel, updatedAt }: P
   }, [currentWorkspace.id, recommendation.contextKey]);
 
   useEffect(() => {
+    // Clear the previous Workspace's task/decision state immediately on switch so
+    // it never renders while the new Workspace's workflow is still loading.
+    setWorkflow(null);
+    setReviewDecision(null);
+    setWorkflowError("");
+    setComposedBlocks(null);
+  }, [currentWorkspace.id]);
+
+  useEffect(() => {
     void loadWorkflow();
   }, [loadWorkflow]);
 

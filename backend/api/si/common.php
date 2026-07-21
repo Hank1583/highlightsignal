@@ -99,15 +99,27 @@ function si_clean_key($value, string $fallback = 'overview'): string
     return preg_match('/^[a-zA-Z0-9_-]{1,40}$/', $value) ? $value : $fallback;
 }
 
+// V09-04: resolves the si_sites/si_analysis_runs Workspace scope for an
+// already-verified user_id (the return value of si_positive_int() for the
+// 'user_id' key, which itself goes through hs_require_service_member()). See
+// legacy_auth.php's hs_resolve_member_workspace_id() for why this does not
+// trust the signed x-hs-workspace-id header for these endpoints.
+function si_resolve_workspace_id(int $userId): int
+{
+    return hs_resolve_member_workspace_id(si_db(), $userId);
+}
+
 function si_latest_summary(string $module, int $userId, int $siteId, string $tabKey): array
 {
     $conn = si_db();
+    $workspaceId = si_resolve_workspace_id($userId);
 
     $stmt = $conn->prepare(
         'SELECT r.*, s.site_name, s.site_url
          FROM si_analysis_runs r
          INNER JOIN si_sites s ON s.id = r.site_id
-         WHERE r.user_id = ?
+         WHERE r.workspace_id = ?
+           AND r.user_id = ?
            AND r.site_id = ?
            AND r.module = ?
            AND r.tab_key = ?
@@ -120,7 +132,7 @@ function si_latest_summary(string $module, int $userId, int $siteId, string $tab
         si_fail('SQL_PREPARE_FAILED', $conn->error, 500);
     }
 
-    $stmt->bind_param('iiss', $userId, $siteId, $module, $tabKey);
+    $stmt->bind_param('iiiss', $workspaceId, $userId, $siteId, $module, $tabKey);
     $stmt->execute();
     $run = $stmt->get_result()->fetch_assoc();
 
@@ -185,12 +197,14 @@ function si_summary_history(string $module, int $userId, int $siteId, string $ta
 {
     $conn = si_db();
     $limit = max(1, min(30, $limit));
+    $workspaceId = si_resolve_workspace_id($userId);
 
     $stmt = $conn->prepare(
         'SELECT r.*, s.site_name, s.site_url
          FROM si_analysis_runs r
          INNER JOIN si_sites s ON s.id = r.site_id
-         WHERE r.user_id = ?
+         WHERE r.workspace_id = ?
+           AND r.user_id = ?
            AND r.site_id = ?
            AND r.module = ?
            AND r.tab_key = ?
@@ -203,7 +217,7 @@ function si_summary_history(string $module, int $userId, int $siteId, string $ta
         si_fail('SQL_PREPARE_FAILED', $conn->error, 500);
     }
 
-    $stmt->bind_param('iissi', $userId, $siteId, $module, $tabKey, $limit);
+    $stmt->bind_param('iiissi', $workspaceId, $userId, $siteId, $module, $tabKey, $limit);
     $stmt->execute();
     $runs = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NEXT_DISABLE_TURBOPACK=1 node --env-file=backend/private/frontend.env node_modules/next/dist/bin/next dev",
+    "dev": "node scripts/dev.mjs",
     "build": "next build --webpack",
     "build:cf": "opennextjs-cloudflare build",
     "typecheck": "tsc --noEmit --pretty false",
@@ -34,6 +34,7 @@
     "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",
     "cross-env": "^10.1.0",
+    "dotenv": "^16.6.1",
     "eslint": "^9",
     "eslint-config-next": "^16.2.7",
     "tailwindcss": "^4",

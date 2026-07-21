@@ -1,10 +1,38 @@
 <?php
+
+declare(strict_types=1);
+
+use HighlightSignal\Workspace\AuthorizationException;
+use HighlightSignal\Workspace\WorkspaceAccessPolicy;
+use HighlightSignal\Workspace\WorkspacePermissions;
+
 require_once __DIR__ . "/../db_connect.php";
-require_once __DIR__ . "/../auth.php";
+require_once __DIR__ . "/../legacy_auth.php";
 
 header("Content-Type: application/json; charset=utf-8");
 
-$member_id = getMemberId();
+$member_id = hs_require_service_member($conn);
+// V09-05: this legacy flat file mutates the exact same field
+// (ga_connections.status) that GaIntegrationService::updateConnectionStatus()
+// gates behind an owner/admin/manager role check -- this was a shadow
+// endpoint with no workspace or role check at all, letting any signed member
+// (viewer included) flip a connection's active status. Brought in line with
+// the new-architecture path: resolve workspace_id server-side, require
+// active membership, then enforce the same central permission matrix.
+$workspace_id = hs_resolve_member_workspace_id($conn, $member_id);
+
+try {
+    $membership = (new WorkspaceAccessPolicy($conn))->requireActiveMembership($workspace_id, $member_id);
+    WorkspacePermissions::requirePermission($membership, 'integrations.manage');
+} catch (AuthorizationException $error) {
+    http_response_code(403);
+    echo json_encode([
+        "ok" => false,
+        "message" => "Workspace role cannot update integrations."
+    ]);
+    exit;
+}
+
 $input = json_decode(file_get_contents("php://input"), true);
 $connection_id = intval($input["connection_id"] ?? 0);
 $status = isset($input["status"]) ? intval($input["status"]) : -1;
@@ -21,18 +49,18 @@ if ($connection_id <= 0 || !in_array($status, [0, 1], true)) {
 $stmt = $conn->prepare("
   UPDATE ga_connections
   SET status = ?
-  WHERE id = ? AND member_id = ?
+  WHERE id = ? AND workspace_id = ?
 ");
-$stmt->bind_param("iii", $status, $connection_id, $member_id);
+$stmt->bind_param("iii", $status, $connection_id, $workspace_id);
 $stmt->execute();
 
 $check = $conn->prepare("
   SELECT id, status
   FROM ga_connections
-  WHERE id = ? AND member_id = ?
+  WHERE id = ? AND workspace_id = ?
   LIMIT 1
 ");
-$check->bind_param("ii", $connection_id, $member_id);
+$check->bind_param("ii", $connection_id, $workspace_id);
 $check->execute();
 $connection = $check->get_result()->fetch_assoc();
 

@@ -25,12 +25,13 @@ function si_handle_generate_summary($module)
 function si_ensure_site($userId, $siteId)
 {
     $conn = si_db();
+    $workspaceId = si_resolve_workspace_id((int)$userId);
 
-    $stmt = $conn->prepare('SELECT id FROM si_sites WHERE id = ? AND user_id = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT id FROM si_sites WHERE id = ? AND user_id = ? AND workspace_id = ? LIMIT 1');
     if (!$stmt) {
         si_fail('SQL_PREPARE_FAILED', $conn->error, 500);
     }
-    $stmt->bind_param('ii', $siteId, $userId);
+    $stmt->bind_param('iii', $siteId, $userId, $workspaceId);
     $stmt->execute();
     if ($stmt->get_result()->fetch_assoc()) {
         return;
@@ -40,11 +41,11 @@ function si_ensure_site($userId, $siteId)
         si_fail('SITE_NOT_FOUND', 'Site not found.', 404);
     }
 
-    $seoStmt = $conn->prepare('SELECT id, site_name, site_url FROM seo_sites WHERE id = ? AND user_id = ? LIMIT 1');
+    $seoStmt = $conn->prepare('SELECT id, site_name, site_url FROM seo_sites WHERE id = ? AND user_id = ? AND workspace_id = ? LIMIT 1');
     if (!$seoStmt) {
         si_fail('SQL_PREPARE_FAILED', $conn->error, 500);
     }
-    $seoStmt->bind_param('ii', $siteId, $userId);
+    $seoStmt->bind_param('iii', $siteId, $userId, $workspaceId);
     $seoStmt->execute();
     $site = $seoStmt->get_result()->fetch_assoc();
 
@@ -52,18 +53,22 @@ function si_ensure_site($userId, $siteId)
         si_fail('SITE_NOT_FOUND', 'Site not found.', 404);
     }
 
+    if ($workspaceId <= 0) {
+        si_fail('WORKSPACE_NOT_FOUND', 'No Workspace mapping for this member.', 409);
+    }
+
     $siteName = (string)($site['site_name'] ?: $site['site_url']);
     $siteUrl = (string)$site['site_url'];
     $isActive = 1;
 
     $insert = $conn->prepare(
-        'INSERT INTO si_sites (id, user_id, site_name, site_url, is_active)
-         VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO si_sites (id, user_id, workspace_id, site_name, site_url, is_active)
+         VALUES (?, ?, ?, ?, ?, ?)'
     );
     if (!$insert) {
         si_fail('SQL_PREPARE_FAILED', $conn->error, 500);
     }
-    $insert->bind_param('iissi', $siteId, $userId, $siteName, $siteUrl, $isActive);
+    $insert->bind_param('iiissi', $siteId, $userId, $workspaceId, $siteName, $siteUrl, $isActive);
     $insert->execute();
 }
 
@@ -90,16 +95,17 @@ function si_load_seo_summary($userId, $siteId)
     }
 
     $conn = si_db();
+    $workspaceId = si_resolve_workspace_id((int)$userId);
     $stmt = $conn->prepare(
         'SELECT summary_json FROM seo_summary_cache
-         WHERE site_id = ? AND user_id = ?
+         WHERE site_id = ? AND user_id = ? AND workspace_id = ?
          ORDER BY updated_at DESC
          LIMIT 1'
     );
     if (!$stmt) {
         return [];
     }
-    $stmt->bind_param('ii', $siteId, $userId);
+    $stmt->bind_param('iii', $siteId, $userId, $workspaceId);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
 

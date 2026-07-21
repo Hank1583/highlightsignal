@@ -1,4 +1,11 @@
 <?php
+
+declare(strict_types=1);
+
+use HighlightSignal\Workspace\AuthorizationException;
+use HighlightSignal\Workspace\WorkspaceAccessPolicy;
+use HighlightSignal\Workspace\WorkspacePermissions;
+
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . "/../db_connect.php";
 require_once __DIR__ . "/../legacy_auth.php";
@@ -14,24 +21,52 @@ if ($user_id <= 0) {
     exit;
 }
 
-$sql = "
+// V09-08: ga_report_schedules/*.php never picked up the V09-03/04 workspace_id
+// migration -- this resolves the caller's workspace server-side (active
+// membership required) and requires it below, rather than trusting user_id
+// alone as the tenant boundary.
+$workspace_id = hs_resolve_member_workspace_id($conn, $user_id);
+
+try {
+    $membership = (new WorkspaceAccessPolicy($conn))->requireActiveMembership($workspace_id, $user_id);
+    WorkspacePermissions::requirePermission($membership, 'read');
+} catch (AuthorizationException $error) {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Workspace access denied.'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+$stmt = $conn->prepare("
 SELECT
     r.*,
     GROUP_CONCAT(c.id ORDER BY c.id ASC) AS connection_id_list,
     GROUP_CONCAT(c.account_name ORDER BY c.id ASC SEPARATOR '|||') AS connection_name_list
 FROM ga_report_schedules r
 LEFT JOIN ga_connections c
-    ON c.member_id = r.user_id
+    ON c.workspace_id = r.workspace_id
    AND FIND_IN_SET(
         c.id,
         REPLACE(REPLACE(REPLACE(REPLACE(r.connection_ids, '\"', ''), '[', ''), ']', ''), ' ', '')
    )
-WHERE r.user_id = {$user_id}
+WHERE r.user_id = ? AND r.workspace_id = ?
 GROUP BY r.id
 ORDER BY r.id DESC
-";
+");
 
-$result = $conn->query($sql);
+if (!$stmt) {
+    echo json_encode([
+        'success' => false,
+        'message' => 'SQL 錯誤',
+        'error' => $conn->error
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+$stmt->bind_param('ii', $user_id, $workspace_id);
+$stmt->execute();
+$result = $stmt->get_result();
 
 if (!$result) {
     echo json_encode([

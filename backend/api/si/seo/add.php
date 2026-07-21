@@ -21,14 +21,29 @@ if (!$user_id || !$site_url) {
   exit;
 }
 
+// V09-04: scope by workspace_id (resolved server-side, not the signed
+// x-hs-workspace-id header -- see legacy_auth.php's
+// hs_resolve_member_workspace_id() for why) in addition to the existing
+// user_id check. Fail closed rather than write workspace_id=0.
+$workspace_id = hs_resolve_member_workspace_id($conn, $user_id);
+
+if (!$workspace_id) {
+  http_response_code(409);
+  echo json_encode([
+    'ok' => false,
+    'message' => 'No Workspace mapping for this member.'
+  ]);
+  exit;
+}
+
 $site_url = rtrim($site_url, '/');
 
 /* duplicate check */
 $stmt = $conn->prepare("
   SELECT id FROM seo_sites
-  WHERE user_id = ? AND site_url = ?
+  WHERE user_id = ? AND workspace_id = ? AND site_url = ?
 ");
-$stmt->bind_param("is", $user_id, $site_url);
+$stmt->bind_param("iis", $user_id, $workspace_id, $site_url);
 $stmt->execute();
 $stmt->store_result();
 
@@ -42,10 +57,10 @@ if ($stmt->num_rows > 0) {
 
 /* insert */
 $stmt = $conn->prepare("
-  INSERT INTO seo_sites (user_id, site_name, site_url)
-  VALUES (?, ?, ?)
+  INSERT INTO seo_sites (user_id, workspace_id, site_name, site_url)
+  VALUES (?, ?, ?, ?)
 ");
-$stmt->bind_param("iss", $user_id, $site_name, $site_url);
+$stmt->bind_param("iiss", $user_id, $workspace_id, $site_name, $site_url);
 $stmt->execute();
 
 $site_id = $stmt->insert_id;

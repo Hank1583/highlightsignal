@@ -18,10 +18,13 @@ final class GaIntegrationRepository
 
     public function listByWorkspace(int $workspaceId, bool $includeInactive): array
     {
-        $sql = "SELECT gc.id, gc.property_id, gc.account_name, gc.status
+        // V09-03: scoped directly by ga_connections.workspace_id (backfilled by
+        // migrations/016) rather than joining through workspaces.owner_member_id, which
+        // was wrong for any member of a workspace they don't own.
+        $sql = 'SELECT gc.id, gc.property_id, gc.account_name, gc.status
                 FROM ga_connections gc
-                INNER JOIN workspaces w ON w.owner_member_id = gc.member_id
-                WHERE w.id = ? AND w.deleted_at IS NULL";
+                INNER JOIN workspaces w ON w.id = gc.workspace_id
+                WHERE gc.workspace_id = ? AND w.deleted_at IS NULL';
 
         if (!$includeInactive) {
             $sql .= ' AND gc.status = 1';
@@ -44,28 +47,27 @@ final class GaIntegrationRepository
 
     public function updateStatus(int $workspaceId, int $connectionId, int $status): array
     {
-        $ownerStatement = $this->database->prepare(
-            'SELECT owner_member_id FROM workspaces WHERE id = ? AND deleted_at IS NULL LIMIT 1'
+        $workspaceStatement = $this->database->prepare(
+            'SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL LIMIT 1'
         );
-        $ownerStatement->bind_param('i', $workspaceId);
-        $ownerStatement->execute();
-        $workspace = $ownerStatement->get_result()->fetch_assoc();
+        $workspaceStatement->bind_param('i', $workspaceId);
+        $workspaceStatement->execute();
+        $workspace = $workspaceStatement->get_result()->fetch_assoc();
 
         if (!is_array($workspace)) {
             throw new NotFoundException('Workspace not found.');
         }
 
-        $ownerMemberId = (int) $workspace['owner_member_id'];
         $update = $this->database->prepare(
-            'UPDATE ga_connections SET status = ? WHERE id = ? AND member_id = ?'
+            'UPDATE ga_connections SET status = ? WHERE id = ? AND workspace_id = ?'
         );
-        $update->bind_param('iii', $status, $connectionId, $ownerMemberId);
+        $update->bind_param('iii', $status, $connectionId, $workspaceId);
         $update->execute();
 
         $select = $this->database->prepare(
-            'SELECT id, property_id, account_name, status FROM ga_connections WHERE id = ? AND member_id = ? LIMIT 1'
+            'SELECT id, property_id, account_name, status FROM ga_connections WHERE id = ? AND workspace_id = ? LIMIT 1'
         );
-        $select->bind_param('ii', $connectionId, $ownerMemberId);
+        $select->bind_param('ii', $connectionId, $workspaceId);
         $select->execute();
         $row = $select->get_result()->fetch_assoc();
 

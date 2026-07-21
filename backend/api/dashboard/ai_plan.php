@@ -209,23 +209,11 @@ function dashboard_plan_ai(string $question)
 
 function dashboard_plan_ensure_table(mysqli $conn)
 {
-    $sql = "CREATE TABLE IF NOT EXISTS dashboard_ai_plan_logs (
-        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-        user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
-        question TEXT NOT NULL,
-        plan_json LONGTEXT NULL,
-        model VARCHAR(80) NULL,
-        source VARCHAR(30) NOT NULL DEFAULT 'ai',
-        status VARCHAR(30) NOT NULL DEFAULT 'success',
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
-        KEY idx_dashboard_ai_plan_logs_user_created (user_id, created_at)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-
-    $conn->query($sql);
+    // dashboard_ai_plan_logs is provisioned by backend/sql/migrations/013_runtime_ddl_extraction.sql;
+    // this is intentionally a no-op so callers can keep calling it defensively.
 }
 
-function dashboard_plan_cache(mysqli $conn, int $userId, string $question)
+function dashboard_plan_cache(mysqli $conn, int $userId, int $workspaceId, string $question)
 {
     dashboard_plan_ensure_table($conn);
 
@@ -233,6 +221,7 @@ function dashboard_plan_cache(mysqli $conn, int $userId, string $question)
         "SELECT plan_json, model, created_at
          FROM dashboard_ai_plan_logs
          WHERE user_id = ?
+           AND workspace_id = ?
            AND question = ?
            AND status = 'success'
            AND created_at >= CURDATE()
@@ -245,7 +234,7 @@ function dashboard_plan_cache(mysqli $conn, int $userId, string $question)
         return null;
     }
 
-    $stmt->bind_param('is', $userId, $question);
+    $stmt->bind_param('iis', $userId, $workspaceId, $question);
     $stmt->execute();
     $result = $stmt->get_result();
     $row = $result ? $result->fetch_assoc() : null;
@@ -269,7 +258,7 @@ function dashboard_plan_cache(mysqli $conn, int $userId, string $question)
     ];
 }
 
-function dashboard_plan_log(mysqli $conn, int $userId, string $question, array $plan, string $source)
+function dashboard_plan_log(mysqli $conn, int $userId, int $workspaceId, string $question, array $plan, string $source)
 {
     dashboard_plan_ensure_table($conn);
 
@@ -279,20 +268,23 @@ function dashboard_plan_log(mysqli $conn, int $userId, string $question, array $
 
     $stmt = $conn->prepare(
         'INSERT INTO dashboard_ai_plan_logs
-         (user_id, question, plan_json, model, source, status)
-         VALUES (?, ?, ?, ?, ?, ?)'
+         (user_id, workspace_id, question, plan_json, model, source, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
 
     if (!$stmt) {
         return;
     }
 
-    $stmt->bind_param('isssss', $userId, $question, $planJson, $model, $source, $status);
+    $stmt->bind_param('iisssss', $userId, $workspaceId, $question, $planJson, $model, $source, $status);
     $stmt->execute();
 }
 
 $input = hs_input();
 $user = hs_request_user($input);
+// V09-04: resolved server-side, not the signed x-hs-workspace-id header --
+// see legacy_auth.php's hs_resolve_member_workspace_id() for why.
+$workspaceId = hs_member_workspace_id((int)$user['id']);
 $question = trim((string)($input['question'] ?? ''));
 
 if ($question === '') {
@@ -300,7 +292,7 @@ if ($question === '') {
 }
 
 $conn = dashboard_plan_db();
-$cached = dashboard_plan_cache($conn, (int)$user['id'], $question);
+$cached = dashboard_plan_cache($conn, (int)$user['id'], $workspaceId, $question);
 
 if ($cached) {
     hs_json($cached);
@@ -314,7 +306,7 @@ if (!$plan) {
     $source = 'rules';
 }
 
-dashboard_plan_log($conn, (int)$user['id'], $question, $plan, $source);
+dashboard_plan_log($conn, (int)$user['id'], $workspaceId, $question, $plan, $source);
 
 hs_json([
     'ok' => true,

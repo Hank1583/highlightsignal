@@ -1,16 +1,22 @@
 <?php
 require_once __DIR__ . "/../db_connect.php";
-require_once __DIR__ . "/../auth.php";
+require_once __DIR__ . "/../legacy_auth.php";
 
 header("Content-Type: application/json; charset=utf-8");
 
-$member_id = getMemberId();
+$member_id = hs_require_service_member($conn);
+// V09-05: scope by workspace_id (resolved server-side, active membership
+// required -- see legacy_auth.php's hs_resolve_member_workspace_id()) rather
+// than member_id alone. This is the same data ga_connections already exposes
+// via /api/v1/workspaces/{id}/integrations/ga (GaIntegrationRepository); this
+// flat file was a leftover shadow path that never picked up that scoping.
+$workspace_id = hs_resolve_member_workspace_id($conn, $member_id);
 $include_inactive = ($_SERVER["HTTP_X_INCLUDE_INACTIVE"] ?? "") === "1";
 
 $sql = "
 SELECT id, property_id, account_name, status
 FROM ga_connections
-WHERE member_id = ?
+WHERE workspace_id = ?
 ";
 
 if (!$include_inactive) {
@@ -20,7 +26,7 @@ if (!$include_inactive) {
 $sql .= " ORDER BY created_at DESC";
 
 $stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $member_id);
+$stmt->bind_param("i", $workspace_id);
 $stmt->execute();
 
 $result = $stmt->get_result();

@@ -1,9 +1,25 @@
 # Task Packet — V09-03 GA Workspace Migration
 
-Status: WAITING_FOR_V09-01_AND_V09-02  
+Status: DONE（資料完整性）／部分待驗證 — 2026-07-20 於真實 pre-launch host 完成驗證
 Milestone: V0.9 Workspace Foundation  
-Dependencies: `V09-01`, `V09-02`  
+Dependencies: `V09-01`, `V09-02`（同一批次完成）  
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`
+Evidence: `backend/sql/migrations/015_ga_connections_workspace_expand.sql`、
+`016_ga_connections_workspace_backfill.sql`、
+`backend/sql/017_ga_connections_workspace_contract_DEFERRED.sql`（未套用）、
+`backend/api/src/Integration/GoogleAnalytics/GaIntegrationRepository.php`、
+`backend/api/ga/account_fetch.php`、`backend/api/ga/oauth_callback.php`。
+2026-07-20 postflight 結果：`ga_connections` 9 筆全數回填
+（`still_null=0`）、`connections_with_missing_workspace=0`、
+`connections_mapped_to_inaccessible_workspace=0`；`workspace_id` 欄位確認
+存在（nullable BIGINT, MUL index）（見 tracker 2026-07-20 條目）。
+OAuth state 竄改／重放／過期：2026-07-20 用真實一次 GA 連接流程（member_id=1,
+workspace_id=2）取得的 state 直接對 `oauth_callback.php` 測試，三項全部確認：
+重放 → `OAuth state already used` (400)；竄改簽章 → `Invalid OAuth state` (400)；
+過期 → `Expired OAuth state` (400)。
+Known gap（未驗證，非資料完整性問題）：跨 Workspace negative test（Member A
+讀 Workspace B 連線）——需要第二個測試帳號/Workspace 才能做，尚待 owner 決定
+是否執行。
 
 ---
 

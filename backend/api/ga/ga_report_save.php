@@ -1,4 +1,11 @@
 <?php
+
+declare(strict_types=1);
+
+use HighlightSignal\Workspace\AuthorizationException;
+use HighlightSignal\Workspace\WorkspaceAccessPolicy;
+use HighlightSignal\Workspace\WorkspacePermissions;
+
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . "/../db_connect.php";
 require_once __DIR__ . "/../legacy_auth.php";
@@ -15,6 +22,20 @@ if (!$input) {
 }
 
 $user_id        = hs_require_service_member($conn, isset($input['user_id']) ? $input['user_id'] : 0);
+
+// V09-08: creating a report schedule selects which GA connections/emails get
+// this tenant's analytics mailed out -- gated the same way as other
+// integration-configuration mutations (account_fetch.php,
+// update_connection_status.php), not left open to any signed member.
+$workspace_id = hs_resolve_member_workspace_id($conn, $user_id);
+
+try {
+    $membership = (new WorkspaceAccessPolicy($conn))->requireActiveMembership($workspace_id, $user_id);
+    WorkspacePermissions::requirePermission($membership, 'integrations.manage');
+} catch (AuthorizationException $error) {
+    echo json_encode(array('success' => false, 'message' => 'Workspace role cannot manage report schedules.'), JSON_UNESCAPED_UNICODE);
+    exit;
+}
 $report_name    = trim(isset($input['report_name']) ? $input['report_name'] : '');
 $report_type    = isset($input['report_type']) ? $input['report_type'] : '';
 $connection_ids = isset($input['connection_ids']) ? $input['connection_ids'] : array();
@@ -58,7 +79,7 @@ if (count($connection_ids) === 0) {
     exit;
 }
 
-$connection_ids = ga_require_connection_ownership($conn, $user_id, $connection_ids);
+$connection_ids = ga_require_connection_ownership($conn, $workspace_id, $connection_ids);
 
 if (!is_array($email_list) || count($email_list) === 0) {
     echo json_encode(array('success' => false, 'message' => '請填寫 email'), JSON_UNESCAPED_UNICODE);
@@ -77,6 +98,7 @@ if (strlen($send_time) === 5) {
 $stmt = $conn->prepare("
     INSERT INTO ga_report_schedules (
         user_id,
+        workspace_id,
         report_name,
         report_type,
         connection_ids,
@@ -87,7 +109,7 @@ $stmt = $conn->prepare("
         email_list,
         section_list,
         is_active
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ");
 
 if (!$stmt) {
@@ -103,8 +125,9 @@ $email_list_json     = json_encode($email_list, JSON_UNESCAPED_UNICODE);
 $section_list_json   = json_encode($section_list, JSON_UNESCAPED_UNICODE);
 
 $stmt->bind_param(
-    "isssiissssi",
+    "iisssiissssi",
     $user_id,
+    $workspace_id,
     $report_name,
     $report_type,
     $connection_ids_json,
