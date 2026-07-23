@@ -1,6 +1,6 @@
 # Task Packet — V11-06 Notification
 
-Status: PLANNED
+Status: VERIFY（程式碼與 SQL 完成、disposable Docker 排練通過（22/22，含真實 Queue 整合與 WorkflowService 整合），真實主機套用與真實 email provider 選型待 owner 執行）
 Milestone: V1.1 Execution & Operations
 Dependency: `V11-02`、`V11-05`
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`（第 7 節）
@@ -48,10 +48,37 @@ Authority: `docs/00_Technical_Specification_Alignment_v1.2.md`（Notification as
 
 # Acceptance criteria
 
-- [ ] Notification 由 Domain Event 觸發且不參與 Decision。
-- [ ] Preference、attempt、retry、dedup 可追蹤。
-- [ ] 至少 in-app channel 真實可用。
-- [ ] Queue/provider failure 不阻斷核心 domain transaction。
+- [x] Notification 由 Domain Event 觸發且不參與 Decision — 接上兩個真實事件
+      （`si/seo/summary.php`／`ga/data_sync.php` 的 signal.detected，
+      `WorkflowService` 的 task.completed），`NotificationService` 不建立
+      Recommendation/Decision/Action。
+- [x] Preference、attempt、retry、dedup 可追蹤 — `notification_preferences`
+      per-event_type 生效；email delivery 經 `queue_jobs` 真實 attempt/retry/
+      dead-letter；`UNIQUE(workspace_id, recipient_member_id, dedup_key)`
+      保證去重。
+- [x] 至少 in-app channel 真實可用 — in-app 為同步、立即可用，opt-out 預設
+      啟用。
+- [x] Queue/provider failure 不阻斷核心 domain transaction — email 一律經
+      queue 非同步處理，never 在 domain transaction 內同步呼叫 provider；
+      provider 未設定時明確標示 `skipped_unconfigured`，不假裝可用。
+
+# Verification evidence
+
+2026-07-21 disposable Docker `mysql:5.6` + local PHP 7.4 CLI 排練
+（22 項斷言全數通過）：詳見 `backend/sql/VERIFICATION_RUNBOOK.md` 第 18 節。
+摘要：dedup（重複提交不同內容不建立重複列，回傳原內容）；in-app 立即送達；
+email 預設 opt-in 未啟用時 skipped_disabled；啟用但 provider 未設定時
+skipped_unconfigured（不建立 queue job）；provider 設定後正確經真實 Queue
+enqueue；**真實跑 queue batch 搭配真實 handler registry**（非測試假 handler）
+證明 `EmailDeliveryHandler` stub 正確失敗並進入 retry/dead-letter，
+delivery 狀態正確更新為 failed 且保留真實錯誤訊息；preference 為
+per-event_type（取消某事件的 in-app 不影響其他事件）；read/dismiss 生命週期
+與跨成員/跨 Workspace 隔離皆正確；**真實整合**——透過 `WorkflowService` 真實
+完成任務步驟，正確觸發 task.completed 通知給真實 assignee。
+
+**尚未執行（需要正式主機）**：套用 migration 035、上傳 PHP 變更、選定並串接
+真實 email provider（目前 `EmailDeliveryHandler` 為明確記錄的 stub，尚未接任何
+provider）、真實瀏覽器登入互動驗證通知列表/read/dismiss/preferences 端點。
 
 # Execution-chat prompt
 

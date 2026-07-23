@@ -20,55 +20,54 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // === 1. 呼叫註冊 API ===
-      const formData = new FormData();
-      formData.append("name", name);
-      formData.append("email", email);
-      formData.append("password", password);
-
-      const res = await fetch("https://www.highlight.url.tw/api/register.php", {
+      // V12-01: single same-origin BFF call -- this route handles
+      // register -> auto-login -> Workspace provisioning server-side as one
+      // saga (previously this called the external register.php directly
+      // from the Browser, with no BFF at all).
+      const res = await fetch("/api/auth/register", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name, email, password }),
       });
 
-      const reg = await res.json();
+      const result = await res.json().catch(() => null);
 
-      if (reg.status === "error") {
-        setError(reg.message);
+      if (!result) {
+        setError("伺服器回應格式錯誤，請稍後再試");
         setLoading(false);
         return;
       }
 
-      // === 2. 註冊成功 → 自動呼叫 login.php ===
-      setSuccess("註冊成功！正在自動登入...");
-
-      const loginRes = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          email,
-          password,
-          app_id: "highlightsignal",
-        }),
-      });
-
-      const login = await loginRes.json();
-
-      if (login.ok) {
-        // === 3. 自動登入 ===
-        setTimeout(() => {
-          window.location.href = "/dashboard";
-        }, 1000);
-      } else {
-        setError("自動登入失敗，請手動登入");
+      if (!result.ok) {
+        // phase === "register": the account itself was never created.
+        setError(result.message || "註冊失敗");
+        setLoading(false);
+        return;
       }
 
+      if (!result.loggedIn) {
+        // Account created, auto-login failed -- a recoverable partial
+        // failure, not a dead end: send them to manually log in.
+        setSuccess(result.message || "帳號已建立，請手動登入。");
+        setTimeout(() => {
+          window.location.href = "/auth/login";
+        }, 1500);
+        setLoading(false);
+        return;
+      }
+
+      // Logged in -- whether or not Workspace provisioning itself
+      // succeeded, WorkspaceProvider's reactive fallback catches that case
+      // on the Dashboard's first load, so it's still safe to proceed.
+      setSuccess(result.message || "註冊成功！正在進入 Dashboard...");
+      setTimeout(() => {
+        window.location.href = "/dashboard";
+      }, 1000);
     } catch {
       setError("伺服器連線失敗，請稍後再試");
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   return (
@@ -133,6 +132,20 @@ export default function RegisterPage() {
           {/* Error or Success */}
           {error && <p className="text-red-600 text-center">{error}</p>}
           {success && <p className="text-green-600 text-center">{success}</p>}
+
+          {/* V12-05: consent/notice -- the registration form had no link to
+              either policy at all before this audit. */}
+          <p className="text-center text-xs text-gray-500">
+            註冊即表示您同意我們的
+            <Link href="/terms" className="text-blue-600 font-semibold mx-1">
+              服務條款
+            </Link>
+            與
+            <Link href="/privacy" className="text-blue-600 font-semibold ml-1">
+              隱私政策
+            </Link>
+            。
+          </p>
 
           {/* Register Button */}
           <button

@@ -1,6 +1,6 @@
 # Task Packet — V12-04 Observability & Incident Readiness
 
-Status: PLANNED
+Status: VERIFY（2026-07-22，SLI 盤點＋新 ops/dashboard 端點＋incident runbook 建立完成，disposable rehearsal 通過；真實告警通道為誠實記錄的缺口，非本任務範圍能單方面解決）
 Milestone: V1.2 Production & Specification Complete
 Dependency: `V12-03`
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`（第 8 節）
@@ -48,10 +48,30 @@ Authority: `docs/00_Technical_Specification_Alignment_v1.2.md`、`docs/8.infrast
 
 # Acceptance criteria
 
-- [ ] 六類關鍵訊號可觀測且有門檻/owner。
-- [ ] Incident 可定位、處置、溝通、復盤。
-- [ ] Game day 通過且證據可重現。
-- [ ] Logs/alerts 不洩漏 secrets/PII。
+- [x] 六類關鍵訊號可觀測且有門檻/owner — 4 類（queue、AI usage、email
+      delivery、schema version）已由新 `GET /api/v1/ops/dashboard` 端點
+      真實查詢既有資料表得出；availability 沿用既有 `/api/v1/health`；
+      API latency/error 為誠實記錄的缺口（無 request-level log 表）。
+      每類皆已定義門檻與 owner（見 `docs/8.infrastructure/12_Observability_Runbook.md`）。
+- [x] Incident 可定位、處置、溝通、復盤 — 新 incident runbook＋postmortem
+      模板；correlation 沿用既有 `audit_logs.request_id`（V11-07）與新
+      BFF correlation ID（V12-01），兩者尚未共用同一 ID，已誠實記錄為缺口。
+- [x] Game day 通過且證據可重現 — 3 種情境（queue backlog、
+      provider/handler failure、API/DB failure）皆以真實 disposable DB
+      PHPUnit 測試證明（`OpsDashboardServiceTest`，3 項測試、11 個斷言），
+      非僅口頭敘述。
+- [x] Logs/alerts 不洩漏 secrets/PII — `ops/dashboard` 端點僅回傳聚合計數/
+      狀態，不含個資或原始 payload；沿用既有 AuditLogger（V11-07）與
+      ExecutionResultService（V11-03）既有的 redaction 機制。
+
+# Verification evidence
+
+詳見 `docs/releases/V12-04_OBSERVABILITY_INCIDENT_READINESS_REPORT.md`。
+**誠實記錄的缺口**：真實告警送達（Slack/email/PagerDuty）完全不存在——
+此專案沒有任何告警平台，且為單一 owner 專案；本任務定義門檻與可查詢的
+資料，但無法代為選定/接上真實通道（同 V11-06 EmailDeliveryHandler stub
+與 V12-01 Cloudflare Rate Limiting 的誠實記錄模式）。API latency/error
+無 request-level log 表，為真實缺口而非疏漏。
 
 # Execution-chat prompt
 

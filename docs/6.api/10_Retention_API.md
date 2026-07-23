@@ -2,9 +2,21 @@
 
 # Data Retention API
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (documents a full
+> workspace-facing CRUD API: `/retention/policies`, `/retention/archive-jobs`,
+> `/retention/deletion-jobs`, `POST /retention/archive|restore|delete`) —
+> does not match what actually shipped. Retention only exists as one
+> internal, signed cron-trigger endpoint,
+> `POST /api/v1/retention/run` (`RetentionCleanupService`,
+> `backend/api/public/index.php`) — there is no public, per-entity,
+> per-workspace retention management API. See
+> `docs/5.database/10_Data_Retention_Database.md`'s own note for the
+> matching real schema. Treat this file as historical design intent, not a
+> current reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: API Specification
 

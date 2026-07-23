@@ -7,16 +7,28 @@
     "ext-json": "*",
     "ext-mysqli": "*"
   },
+  "require-dev": {
+    "phpunit/phpunit": "^9.6"
+  },
   "autoload": {
     "psr-4": {
-      "HighlightSignal\\": "src/"
+      "HighlightSignal\\": "../api/src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "HighlightSignal\\Tests\\": "tests/"
     }
   },
   "scripts": {
     "migrate": "php bin/migrate.php",
-    "lint": "php bin/lint.php"
+    "lint": "php bin/lint.php",
+    "test": "phpunit --colors=never"
   },
   "config": {
-    "sort-packages": true
+    "sort-packages": true,
+    "platform": {
+      "php": "7.4.33"
+    }
   }
 }

@@ -289,7 +289,177 @@ ON DUPLICATE KEY UPDATE version = version;
 -- applied -- recordDecision() now writes the new columns unconditionally.
 
 -- ============================================================
+-- Step 15 (V11-01): FIRST run
+-- backend/sql/preflight_v11_01_action_task_inventory.sql (confirms `actions`
+-- doesn't already exist, inventories the CURRENT `tasks` shape/data, and
+-- confirms every existing task's recommendation has a recoverable
+-- accepted/modified Decision for the backfill below). Only then open
+-- backend/sql/migrations/029_action_manual_task_lifecycle.sql, paste and
+-- run it. Brand-new `actions` table (real NOT NULL FKs); `tasks` gets a
+-- nullable/additive expand only -- `recommendation_id` stays NOT NULL and
+-- dual-written, every existing row keeps working.
+-- ============================================================
+
+INSERT INTO schema_migrations (version, name, checksum, duration_ms, executor) VALUES
+  ('029', '029_action_manual_task_lifecycle.sql', '6f95cbcb8af942039a2f26ee19de579dab958b169d2e3b9e06fde067df83258e', 0, 'REPLACE_WITH_YOUR_NAME')
+ON DUPLICATE KEY UPDATE version = version;
+
+-- Then open backend/sql/migrations/030_action_manual_task_backfill.sql,
+-- paste and run it -- creates one Action per PRE-EXISTING Task row and
+-- backfills tasks.action_id. Idempotent (safe to re-run; every statement is
+-- guarded against rows already backfilled).
+
+INSERT INTO schema_migrations (version, name, checksum, duration_ms, executor) VALUES
+  ('030', '030_action_manual_task_backfill.sql', '32552c3766c7bf0e6ab405b115e0a5745f5c3a76944bfec3f3a1664498f8c7ec', 0, 'REPLACE_WITH_YOUR_NAME')
+ON DUPLICATE KEY UPDATE version = version;
+
+-- Afterward run backend/sql/postflight_v11_01_action_task_invariants.sql
+-- and confirm tasks_missing_action_id = 0. Do NOT upload
+-- backend/api/src/Dashboard/WorkflowRepository.php/WorkflowService.php/
+-- backend/api/src/Action/ActionRepository.php/public/index.php changes
+-- before BOTH 029 and 030 are applied -- WorkflowService now reads/writes
+-- action_id unconditionally and instantiates ActionRepository in its
+-- constructor.
+
+-- ============================================================
+-- Step 16 (V11-02): FIRST run
+-- backend/sql/preflight_v11_02_queue_inventory.sql (confirms `queue_jobs`'
+-- current shape/data -- it has existed since migrations/010 but no
+-- application code has ever written to it). Only then open
+-- backend/sql/migrations/031_queue_worker_reliability_expand.sql, paste and
+-- run it. Nullable/opt-in expand only -- adds idempotency_key + a unique
+-- key, and handler_version; every existing row (if any) keeps working.
+-- ============================================================
+
+INSERT INTO schema_migrations (version, name, checksum, duration_ms, executor) VALUES
+  ('031', '031_queue_worker_reliability_expand.sql', '075617c5a9621cd3dfc3bb94ea0b75f6f912ce1ea98472e7148ddbe408ec6001', 0, 'REPLACE_WITH_YOUR_NAME')
+ON DUPLICATE KEY UPDATE version = version;
+
+-- Afterward run backend/sql/postflight_v11_02_queue_invariants.sql. Before
+-- relying on the queue worker trigger endpoint (POST /api/v1/queue/run) in
+-- production, set the QUEUE_WORKER_SECRET environment variable (a fresh,
+-- random secret -- NOT the same value as SERVICE_AUTH_SECRET) and configure
+-- an external scheduler to call it periodically with a signed request; see
+-- backend/sql/VERIFICATION_RUNBOOK.md section 14 for the exact signature
+-- scheme and operational runbook.
+
+-- ============================================================
+-- Step 17 (V11-03): FIRST run
+-- backend/sql/preflight_v11_03_execution_result_inventory.sql (confirms
+-- `execution_results` doesn't already exist, and that tasks/queue_jobs are
+-- already at the shape this task's FKs need -- 029/030 and 031 must already
+-- be applied). Only then open
+-- backend/sql/migrations/032_execution_result_persistence.sql, paste and
+-- run it. Brand-new table, real NOT NULL FKs from creation.
+-- ============================================================
+
+INSERT INTO schema_migrations (version, name, checksum, duration_ms, executor) VALUES
+  ('032', '032_execution_result_persistence.sql', '8de5d074f29223540ef9865e6cd9d1d6934f71fcea90fc6d04ba4a6865a47622', 0, 'REPLACE_WITH_YOUR_NAME')
+ON DUPLICATE KEY UPDATE version = version;
+
+-- Afterward run backend/sql/postflight_v11_03_execution_result_invariants.sql.
+-- Do NOT upload backend/api/src/Execution/**/backend/api/src/Dashboard/
+-- WorkflowService.php/backend/api/src/Queue/QueueService.php/public/index.php
+-- changes before this migration is applied -- both WorkflowService and
+-- QueueService now instantiate ExecutionResultService unconditionally.
+
+-- ============================================================
+-- Step 18 (V11-04): FIRST run
+-- backend/sql/preflight_v11_04_business_outcome_metric_inventory.sql
+-- (confirms `business_outcome_metrics` doesn't already exist and `actions`
+-- is already in place). Only then open
+-- backend/sql/migrations/033_business_outcome_metric_persistence.sql,
+-- paste and run it. Brand-new, ADDITIVE table -- the legacy
+-- `business_outcomes` table is completely untouched by this migration.
+-- ============================================================
+
+INSERT INTO schema_migrations (version, name, checksum, duration_ms, executor) VALUES
+  ('033', '033_business_outcome_metric_persistence.sql', '1fa7a1d35d7ba1e840ce344d41eb37d2c3495698a5a53941833221abfebe2eb7', 0, 'REPLACE_WITH_YOUR_NAME')
+ON DUPLICATE KEY UPDATE version = version;
+
+-- Afterward run backend/sql/postflight_v11_04_business_outcome_metric_invariants.sql
+-- and confirm legacy_business_outcomes_rows_still_here matches the
+-- preflight's legacy_business_outcomes_rows_untouched count exactly.
+
+-- ============================================================
+-- Step 19 (V11-05): FIRST run
+-- backend/sql/preflight_v11_05_evaluation_inventory.sql (confirms
+-- `evaluations` doesn't already exist). Only then open
+-- backend/sql/migrations/034_evaluation_feedback_persistence.sql, paste and
+-- run it. Brand-new table, real FK on workspace_id only (subject_id is
+-- deliberately polymorphic, no FK -- see the migration's own header).
+-- ============================================================
+
+INSERT INTO schema_migrations (version, name, checksum, duration_ms, executor) VALUES
+  ('034', '034_evaluation_feedback_persistence.sql', 'ff225e63d0b1df5e6c5ee694b1213a75c5566037377b38e9342e4c088e1956c2', 0, 'REPLACE_WITH_YOUR_NAME')
+ON DUPLICATE KEY UPDATE version = version;
+
+-- Afterward run backend/sql/postflight_v11_05_evaluation_invariants.sql.
+
+-- ============================================================
+-- Step 20 (V11-06): FIRST run
+-- backend/sql/preflight_v11_06_notification_inventory.sql (confirms none of
+-- the 3 new tables already exist, and `queue_jobs`/031 is already applied
+-- -- email delivery FKs into it). Only then open
+-- backend/sql/migrations/035_notification_persistence.sql, paste and run
+-- it. Three brand-new tables, real FKs from creation.
+-- ============================================================
+
+INSERT INTO schema_migrations (version, name, checksum, duration_ms, executor) VALUES
+  ('035', '035_notification_persistence.sql', '6492b0ac6751172ebbdd02e26bbea0e03863dba1047bad6cd15468f67755318c', 0, 'REPLACE_WITH_YOUR_NAME')
+ON DUPLICATE KEY UPDATE version = version;
+
+-- Afterward run backend/sql/postflight_v11_06_notification_invariants.sql.
+-- Before relying on real email delivery in production, set
+-- NOTIFICATION_EMAIL_PROVIDER_API_KEY AND replace
+-- backend/api/src/Notification/EmailDeliveryHandler.php's `send()` body
+-- with a real provider integration -- today it always throws by design
+-- (see its own class doc).
+
+-- ============================================================
+-- Step 21 (V11-07): FIRST run
+-- backend/sql/preflight_v11_07_audit_log_inventory.sql (confirms
+-- `audit_logs` and its existing indexes -- no new table here). Only then
+-- open backend/sql/migrations/036_audit_log_search_index.sql, paste and run
+-- it. One additive ADD INDEX, no column changes, safe on a live table.
+-- ============================================================
+
+INSERT INTO schema_migrations (version, name, checksum, duration_ms, executor) VALUES
+  ('036', '036_audit_log_search_index.sql', '02a67346899ba79985a2877a3d496f8a5feb45a822074e6db5084ed07e3f0e42', 0, 'REPLACE_WITH_YOUR_NAME')
+ON DUPLICATE KEY UPDATE version = version;
+
+-- Afterward run backend/sql/postflight_v11_07_audit_log_invariants.sql.
+-- Also upload the PHP changes (new backend/api/src/Audit/* classes,
+-- converged AuditLogger call sites, new audit.read permission, new
+-- GET .../audit-logs route) -- this migration alone does not change any
+-- application behavior by itself.
+
+-- ============================================================
+-- Step 22 (V11-08): FIRST run
+-- backend/sql/preflight_v11_08_retention_inventory.sql (confirms
+-- `retention_cleanup_runs` does not already exist, and that
+-- queue_jobs/execution_results/notifications -- the tables the new
+-- cleanup jobs read from -- are already applied). Only then open
+-- backend/sql/migrations/037_retention_cleanup_runs.sql, paste and run it.
+-- One brand-new table, real FK from creation.
+-- ============================================================
+
+INSERT INTO schema_migrations (version, name, checksum, duration_ms, executor) VALUES
+  ('037', '037_retention_cleanup_runs.sql', 'd3c046fab06cbc94c92f1158b296df94087135550293322f586d83342df8f256', 0, 'REPLACE_WITH_YOUR_NAME')
+ON DUPLICATE KEY UPDATE version = version;
+
+-- Afterward run backend/sql/postflight_v11_08_retention_invariants.sql.
+-- Also upload the PHP changes (new backend/api/src/Retention/* classes,
+-- new POST /api/v1/retention/run route). Before relying on the dead-letter
+-- Queue Job cleanup branch, an owner must explicitly set
+-- RETENTION_DEAD_LETTER_CLEANUP_APPROVED=true -- unset means it is never
+-- included, no matter how old. Configure an external scheduler (a free
+-- cron-ping service, GitHub Actions scheduled workflow, etc.) to POST this
+-- endpoint periodically -- start with ?mode=dry_run (the default) to
+-- observe what WOULD be deleted before ever passing ?mode=delete.
+
+-- ============================================================
 -- After all of the above: run `SELECT * FROM schema_migrations ORDER BY version;`
--- and confirm all 16 rows (010-016, 018-019, 021-022, 024-028) are present
+-- and confirm all 25 rows (010-016, 018-019, 021-022, 024-037) are present
 -- with the checksums shown here.
 -- ============================================================

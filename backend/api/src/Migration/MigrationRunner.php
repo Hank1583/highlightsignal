@@ -35,6 +35,16 @@ final class MigrationRunner
 
         $rows = array();
         foreach ($files as $version => $file) {
+            // V12-02: PHP auto-casts an array key that looks like a clean
+            // decimal integer (no leading zero) to a real int -- every real
+            // migration version has a leading zero ("010".."037") and is
+            // immune, but this class's own contract says "version", a
+            // string identifier, not a number. Found via this task's
+            // automated test suite using synthetic fixture versions ("900",
+            // "901") that ARE unsafe, exposing a latent bug that would
+            // otherwise stay dormant until a real migration ever reaches
+            // version 100+.
+            $version = (string) $version;
             $name = basename($file);
             if (isset($applied[$version])) {
                 $checksum = $this->checksum($file);
@@ -72,6 +82,7 @@ final class MigrationRunner
 
             // Fail closed before applying anything if any already-applied file has drifted.
             foreach ($files as $version => $file) {
+                $version = (string) $version; // see status()'s own comment on this cast
                 if (!isset($applied[$version])) {
                     continue;
                 }
@@ -92,6 +103,7 @@ final class MigrationRunner
 
             $results = array();
             foreach ($files as $version => $file) {
+                $version = (string) $version; // see status()'s own comment on this cast
                 if (isset($applied[$version])) {
                     continue;
                 }

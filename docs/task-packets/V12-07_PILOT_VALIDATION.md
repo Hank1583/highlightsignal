@@ -1,6 +1,6 @@
 # Task Packet — V12-07 Pilot Validation
 
-Status: PLANNED
+Status: BLOCKED_NEEDS_REAL_PILOT（2026-07-22，完整 pilot protocol／participant criteria／consent＆隱私流程／journey tracking template／defect triage／report 格式已備妥並可立即執行；任務本身要求「沒有真實 participants 時不得用 mock 宣布完成」——目前無真實部署與真實 pilot 使用者，無法產出 3-5 個真實 Workspace 的真實 journey 記錄，待 owner 提供真實部署與同意的 pilot 對象）
 Milestone: V1.2 Production & Specification Complete
 Dependency: `V12-06`
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`（第 8 節）
@@ -49,10 +49,26 @@ Authority: `docs/00_Technical_Specification_Alignment_v1.2.md`（V1 Scope、Huma
 
 # Acceptance criteria
 
-- [ ] 3～5 個真實 Workspace 完成 Pilot 記錄。
-- [ ] 至少一條 journey 到 Business Outcome。
-- [ ] P0/P1 已處理並重驗。
-- [ ] 隱私、支持與營運問題有 owner。
+- [ ] 3～5 個真實 Workspace 完成 Pilot 記錄 — **無法完成**：目前無真實
+      部署（無真實 Cloudflare/PHP host 套用），也無真實 pilot 對象；
+      protocol／participant criteria／journey tracking template 已備妥
+      （見下方 Verification evidence），待 owner 提供真實環境與對象。
+- [ ] 至少一條 journey 到 Business Outcome — 同上，需真實 Workspace 才能
+      驗證，無法用 mock 宣布完成（本任務包自身明文禁止）。
+- [ ] P0/P1 已處理並重驗 — 需真實 pilot 執行後才會產生真實缺陷；triage
+      規則（沿用 V12-05 P0/P1 定義）已備妥。
+- [ ] 隱私、支持與營運問題有 owner — protocol 已定義同意流程、隱私邊界
+      （沿用既有 `/privacy`／`/data-deletion`，不另建 pilot 專屬資料收集）
+      與支持管道（沿用既有單一 owner email），待真實執行時套用。
+
+# Verification evidence
+
+詳見 `docs/releases/V12-07_PILOT_VALIDATION_PROTOCOL.md`（完整 protocol：
+participant criteria、成功指標/退出條件、consent/隱私/support 流程、
+journey-stage tracking template、defect severity triage、report 格式）。
+**誠實記錄的缺口**：此份文件本身即是唯一可交付的產出——真實 pilot 執行
+需要 owner 先解決「無真實部署」與「無真實 pilot 對象」兩個前提，非本次
+session 能單方面解決，同 `V12-03`/`V12-04` 已記錄的模式。
 
 # Execution-chat prompt
 

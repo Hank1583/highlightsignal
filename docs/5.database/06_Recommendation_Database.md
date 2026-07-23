@@ -2,9 +2,21 @@
 
 # Recommendation Database
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (`recommendation_actions`,
+> `recommendation_status_history`, `recommendation_feedback` as
+> Recommendation sub-tables) — does not match what actually shipped. Real
+> schema splits these into their own top-level, formally-separated concepts:
+> `decisions` (expanded to 6 outcomes, `migrations/028`), `actions`
+> (its own lifecycle table, `migrations/029`/`030`), `evaluations`
+> (`migrations/034`) and `business_outcome_metrics` (`migrations/033`) for
+> feedback/outcomes — not a single Recommendation-owned sub-tree. Real
+> service: `backend/api/src/Dashboard/WorkflowService.php` (not a
+> `Recommendation` module). Treat this file as historical design intent,
+> not a current reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: Database Specification
 

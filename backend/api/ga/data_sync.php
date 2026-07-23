@@ -229,7 +229,7 @@ while ($row = $res->fetch_assoc()) {
 
                 $gaSignalRepository = new \HighlightSignal\Signal\SignalRepository($conn);
                 $gaSignalService = new \HighlightSignal\Signal\SignalService($conn, $gaSignalRepository);
-                $gaSignalService->runGaTrafficAnomalyDetection(
+                $gaSignalStats = $gaSignalService->runGaTrafficAnomalyDetection(
                     $workspace_id,
                     (int) $connection_id,
                     $account_name,
@@ -249,6 +249,37 @@ while ($row = $res->fetch_assoc()) {
                     $baselineDayCount,
                     $theDate . ' 00:00:00'
                 );
+
+                // V11-06: notify only on a genuinely NEW or reopened traffic
+                // anomaly, day-level deduped (this loop can run the same
+                // connection for many days in one Range Sync call) --
+                // never on a bump of an already-open, already-notified
+                // anomaly.
+                if (($gaSignalStats['created'] ?? 0) > 0 || ($gaSignalStats['reopened'] ?? 0) > 0) {
+                    try {
+                        $gaNotificationRepository = new \HighlightSignal\Notification\NotificationRepository($conn);
+                        $gaNotificationService = new \HighlightSignal\Notification\NotificationService(
+                            $gaNotificationRepository,
+                            new \HighlightSignal\Queue\QueueService(
+                                new \HighlightSignal\Queue\QueueRepository($conn),
+                                $conn,
+                                new \HighlightSignal\Execution\ExecutionResultService(new \HighlightSignal\Execution\ExecutionResultRepository($conn))
+                            )
+                        );
+                        $gaNotificationService->notifyWorkspace(
+                            $workspace_id,
+                            'signal.detected',
+                            'warning',
+                            sprintf('連結「%s」偵測到流量異常下滑', $account_name),
+                            sprintf('連結 #%d 於 %s 的工作階段明顯低於近期平均，請至決策中心查看。', $connection_id, $theDate),
+                            'GaConnection',
+                            (string) $connection_id,
+                            hash('sha256', 'signal.detected:ga:' . $connection_id . ':' . $theDate)
+                        );
+                    } catch (\Throwable $gaNotifyError) {
+                        error_log('GA notification dispatch failed: ' . $gaNotifyError->getMessage());
+                    }
+                }
             } catch (\Throwable $gaSignalError) {
                 // Signal/Evidence detection must never break the GA sync
                 // console itself -- a missed detection is recoverable on the

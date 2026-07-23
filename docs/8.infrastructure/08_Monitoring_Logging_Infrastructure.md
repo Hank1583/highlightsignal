@@ -1,5 +1,13 @@
 # 08_Monitoring_Logging_Infrastructure
 
+> **V12-04 note (2026-07-22)**: this document's "V1 Alert Strategy" and
+> "Future Evolution" sections described automated alerting as something to
+> "導入" (introduce) later. See `12_Observability_Runbook.md` for what is
+> now real: an SLI inventory backed by a new signed `GET /api/v1/ops/dashboard`
+> endpoint, alert thresholds, an incident runbook, and a real disposable-DB
+> game day. Real alert DELIVERY (Slack/PagerDuty/email) still does not
+> exist — honestly flagged there as an owner decision, not silently closed.
+
 Version: v1.0
 
 Status: Stable

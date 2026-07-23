@@ -1,5 +1,19 @@
 # 03_User_Account_Backend.md
 
+> **V12-01 note (2026-07-22)**: this document describes an ASPIRATIONAL
+> from-scratch identity backend (custom `UserRepository`, Argon2id,
+> `EmailVerificationService`, etc.) that does not exist and is not what this
+> project actually has. The real system: user/password identity lives
+> entirely in an external, shared, cross-product legacy PHP system
+> (`D:\7.Highlight\1.Project\4.php\api`, NOT part of this repo, NOT
+> modified by this project) — this repo only ever calls it via a Next.js
+> BFF (`app/api/auth/*`, `lib/legacyMemberAuth.ts`). No email verification
+> or password reset exists anywhere today. See
+> `docs/releases/V12-01_REGISTRATION_ONBOARDING_BFF_REPORT.md` for what is
+> real. Reconciling this document with reality is V12-06's job
+> ("文件與實作對齊"), not done here — treat every section below as a
+> future-design reference only, not current behavior.
+
 # User Account Backend
 
 Version: v1.0

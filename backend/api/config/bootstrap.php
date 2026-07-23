@@ -24,7 +24,7 @@ if (is_file($vendorAutoload)) {
 
 $environmentFile = getenv('HIGHLIGHT_SIGNAL_ENV_FILE');
 if ($environmentFile === false || trim($environmentFile) === '') {
-    $environmentFile = dirname($backendRoot) . '/private/.env';
+    $environmentFile = dirname($backendRoot) . '/highlightsignal/private/.env';
 }
 
 HighlightSignal\Config\Environment::load($environmentFile);

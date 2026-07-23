@@ -1,6 +1,6 @@
 # Task Packet — V12-08 Final Acceptance & Production Release
 
-Status: PLANNED
+Status: BLOCKED_NEEDS_OWNER_GOLIVE（2026-07-22，consolidated final checklist 與 V1.2 Release Notes 草稿已備妥並可立即使用；本任務明文規定「不構成 production deployment 授權」，且 mandatory verification 要求 Pilot／staging promotion／production go-live 全部通過——Pilot 本身為 BLOCKED_NEEDS_REAL_PILOT，staging/production 部署待 owner 明確核准，皆非本 session 能單方面完成）
 Milestone: V1.2 Production & Specification Complete
 Dependency: `V12-01`～`V12-07`、所有前置 milestone 出口條件
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`（第 8 節）
@@ -49,11 +49,34 @@ Authority: `docs/00_Technical_Specification_Alignment_v1.2.md`（全部固定決
 
 # Acceptance criteria
 
-- [ ] Alignment v1.2 固定決策全部成立。
-- [ ] 無未處理 P0/P1。
-- [ ] Pilot、restore、rollback、staging、monitoring 與 owner readiness 通過。
-- [ ] Owner 已明確核准 production go-live。
-- [ ] Release 可重現、可觀測、可回滾。
+- [x] Alignment v1.2 固定決策全部成立 — 見
+      `docs/releases/V12-08_FINAL_ACCEPTANCE_CHECKLIST.md` 第 1 節
+      consolidated checklist，逐項對照 V08-V12 每個 task 的真實證據
+      （code-complete 欄位）。
+- [x] 無未處理 P0/P1 — V12-05 找到的 2 個 P1 皆已修復並重驗；其餘殘留
+      風險皆為已記錄、有 owner 的低嚴重度項目（見 checklist 第 2 節、
+      release notes「Known limitations」）。
+- [ ] Pilot、restore、rollback、staging、monitoring 與 owner readiness
+      通過 — **無法完成**：Pilot 為 BLOCKED_NEEDS_REAL_PILOT（無真實
+      participants）；staging promotion 需要真實 Cloudflare 部署（owner
+      政策待 V1.2 全數驗收後才部署，形成待 owner 解決的循環依賴）；
+      restore／rollback 機制皆已備妥（V11-08 真實 mysqldump 演練、
+      V12-03 runbook）但從未針對「真實部署」執行過。
+- [ ] Owner 已明確核准 production go-live — 本次 session 未請求也未取得
+      此核准（本任務包自身明文規定「不構成 production deployment
+      授權」）。
+- [x] Release 可重現、可觀測、可回滾 — manifest generator（V12-03，已對
+      真實 25 筆 migration checksum 驗證過）、ops dashboard（V12-04）、
+      rollback/fix-forward matrix（V12-03 runbook）皆為真實、可重現的
+      機制，僅未曾對「真實部署」實際跑過一次。
+
+# Verification evidence
+
+詳見 `docs/releases/V12-08_FINAL_ACCEPTANCE_CHECKLIST.md`（consolidated
+checklist，含「尚未為真」清單與 cutover 時的 GA OAuth/路徑變更提醒）與
+`docs/releases/V1.2_RELEASE_NOTES.md`（DRAFT，待真實 cutover 時填入真實
+日期/commit SHA/部署證據/owner 簽核）。**本文件不構成、也不應被解讀為
+production deployment 授權。**
 
 # Execution-chat prompt
 

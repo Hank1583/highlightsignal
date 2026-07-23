@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace HighlightSignal\Signal;
 
+use HighlightSignal\Audit\AuditLogger;
 use HighlightSignal\Auth\ServiceIdentity;
 use HighlightSignal\Http\NotFoundException;
 use HighlightSignal\Http\ValidationException;
@@ -30,11 +31,13 @@ final class SignalService
 
     private $database;
     private $repository;
+    private $auditLogger;
 
     public function __construct(mysqli $database, SignalRepository $repository)
     {
         $this->database = $database;
         $this->repository = $repository;
+        $this->auditLogger = new AuditLogger($database);
     }
 
     public function listForWorkspace(int $workspaceId, array $filters, int $page, int $perPage): array
@@ -67,13 +70,14 @@ final class SignalService
         $this->database->begin_transaction();
         try {
             $this->repository->updateStatus($identity->workspaceId, $signalId, $status);
-            $this->audit(
+            $this->auditLogger->record(
                 $identity->workspaceId,
                 $identity->memberId,
-                $identity->nonce,
-                'Signal ' . ucfirst($status),
+                'signal.' . $status,
+                'Signal',
                 (string) $existing['public_id'],
-                array('from_status' => $existing['status'], 'to_status' => $status)
+                array('from_status' => $existing['status'], 'to_status' => $status),
+                $identity->nonce
             );
             $this->database->commit();
         } catch (\Throwable $error) {
@@ -149,60 +153,74 @@ final class SignalService
     {
         $stats = array('created' => 0, 'reopened' => 0, 'bumped' => 0, 'resolved' => 0);
 
-        foreach ($plan['to_upsert'] as $item) {
-            $result = $this->repository->upsertByDedupKey(
-                $workspaceId,
-                $item['dedup_key'],
-                $item['signal_type'],
-                $item['severity'],
-                $item['source'],
-                $item['source_ref_type'],
-                $item['source_ref_id'],
-                $item['title'],
-                $item['summary']
-            );
+        // V11-07: this whole method used to run every upsert/resolve and its
+        // audit row as separate autocommit statements -- a crash partway
+        // through left signal state changes with no corresponding audit row.
+        // One transaction per call (one call = one detector run for one
+        // site/connection) makes "every signal state change this call made
+        // is audited, or none of them persisted" a real guarantee.
+        $this->database->begin_transaction();
+        try {
+            foreach ($plan['to_upsert'] as $item) {
+                $result = $this->repository->upsertByDedupKey(
+                    $workspaceId,
+                    $item['dedup_key'],
+                    $item['signal_type'],
+                    $item['severity'],
+                    $item['source'],
+                    $item['source_ref_type'],
+                    $item['source_ref_id'],
+                    $item['title'],
+                    $item['summary']
+                );
 
-            if ($result['was_new']) {
-                $stats['created']++;
-                $this->audit(
-                    $workspaceId,
-                    null,
-                    null,
-                    'Signal Detected',
-                    (string) $result['row']['public_id'],
-                    array('type' => $item['signal_type'], 'source' => $item['source'])
-                );
-            } elseif ($result['was_reopened']) {
-                $stats['reopened']++;
-                $this->audit(
-                    $workspaceId,
-                    null,
-                    null,
-                    'Signal Reopened',
-                    (string) $result['row']['public_id'],
-                    array('type' => $item['signal_type'], 'source' => $item['source'])
-                );
-            } else {
-                $stats['bumped']++;
+                if ($result['was_new']) {
+                    $stats['created']++;
+                    $this->auditLogger->record(
+                        $workspaceId,
+                        null,
+                        'signal.detected',
+                        'Signal',
+                        (string) $result['row']['public_id'],
+                        array('type' => $item['signal_type'], 'source' => $item['source'])
+                    );
+                } elseif ($result['was_reopened']) {
+                    $stats['reopened']++;
+                    $this->auditLogger->record(
+                        $workspaceId,
+                        null,
+                        'signal.reopened',
+                        'Signal',
+                        (string) $result['row']['public_id'],
+                        array('type' => $item['signal_type'], 'source' => $item['source'])
+                    );
+                } else {
+                    $stats['bumped']++;
+                }
             }
-        }
 
-        foreach ($plan['to_resolve'] as $dedupKey) {
-            $existing = $this->repository->findByDedupKey($workspaceId, $dedupKey);
-            if (!is_array($existing)) {
-                continue;
+            foreach ($plan['to_resolve'] as $dedupKey) {
+                $existing = $this->repository->findByDedupKey($workspaceId, $dedupKey);
+                if (!is_array($existing)) {
+                    continue;
+                }
+                if ($this->repository->markResolvedByDedupKeyIfOpen($workspaceId, $dedupKey)) {
+                    $stats['resolved']++;
+                    $this->auditLogger->record(
+                        $workspaceId,
+                        null,
+                        'signal.auto_resolved',
+                        'Signal',
+                        (string) $existing['public_id'],
+                        array('source' => (string) ($existing['source'] ?? 'unknown'))
+                    );
+                }
             }
-            if ($this->repository->markResolvedByDedupKeyIfOpen($workspaceId, $dedupKey)) {
-                $stats['resolved']++;
-                $this->audit(
-                    $workspaceId,
-                    null,
-                    null,
-                    'Signal Auto-Resolved',
-                    (string) $existing['public_id'],
-                    array('source' => (string) ($existing['source'] ?? 'unknown'))
-                );
-            }
+
+            $this->database->commit();
+        } catch (\Throwable $error) {
+            $this->database->rollback();
+            throw $error;
         }
 
         return $stats;
@@ -228,31 +246,4 @@ final class SignalService
         );
     }
 
-    /** @param mixed $actorMemberId int|null; @param mixed $requestId string|null */
-    private function audit(
-        int $workspaceId,
-        $actorMemberId,
-        $requestId,
-        string $eventType,
-        string $entityId,
-        array $metadata
-    ): void {
-        $entityType = 'Signal';
-        $metadataJson = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $statement = $this->database->prepare(
-            'INSERT INTO audit_logs (workspace_id, actor_member_id, event_type, entity_type, entity_id, request_id, metadata_json)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
-        );
-        $statement->bind_param(
-            'iisssss',
-            $workspaceId,
-            $actorMemberId,
-            $eventType,
-            $entityType,
-            $entityId,
-            $requestId,
-            $metadataJson
-        );
-        $statement->execute();
-    }
 }

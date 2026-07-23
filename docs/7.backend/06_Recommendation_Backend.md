@@ -2,9 +2,22 @@
 
 # Recommendation Backend
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (describes a full
+> `Modules/Recommendation/` with `RecommendationController`,
+> `RecommendationLifecycleController`, `RecommendationActionController`,
+> `RecommendationFeedbackController` and matching services/repositories) —
+> **no `backend/api/src/Recommendation/` directory exists at all.** That
+> logic actually lives in `backend/api/src/Dashboard/WorkflowController.php`
+> + `WorkflowService.php` + `WorkflowRepository.php`, plus
+> `backend/api/src/Action/ActionRepository.php` — an entirely different
+> module boundary than documented. See
+> `docs/6.api/06_Recommendation_API.md`'s own note for the matching real
+> routes. Treat this file as historical design intent, not a current
+> reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: Backend Specification
 

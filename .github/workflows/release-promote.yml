@@ -1,0 +1,107 @@
+name: Release promote
+
+# V12-03: manual-only promotion pipeline, separate from the always-on
+# `release-gate.yml` verification workflow. Never triggers on push/PR --
+# `workflow_dispatch` only, so a promotion is always a deliberate, logged,
+# named action, never an accidental side effect of merging.
+#
+# `environment: staging` / `environment: production` below are GitHub's own
+# Environment protection feature -- THIS FILE ALONE DOES NOT ENFORCE
+# APPROVAL. For it to actually gate anything, the owner must separately
+# create matching Environments (Settings -> Environments -> New environment)
+# named exactly "staging" and "production" and add required reviewers there.
+# Until that one-time repo-settings step is done, this workflow will run
+# immediately on dispatch with no approval gate -- this is a real gap this
+# task cannot close by itself (no gh/API access available in this
+# environment to configure it; it is also a "change account settings"
+# action requiring the owner's own explicit action, not something to do
+# unilaterally even if access existed).
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which environment to promote to"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      confirm_migrations_applied:
+        description: "I confirm all pending backend/sql/migrations have been manually applied via phpMyAdmin per manual_apply_bookkeeping.sql, and the matching postflight script was run"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-promote-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  # Runs the SAME checks release-gate.yml does, as a promotion-time
+  # safety net -- a promotion should never be the first time these run
+  # against the exact commit being promoted.
+  reverify:
+    if: inputs.confirm_migrations_applied
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+
+  promote:
+    needs: reverify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # See the file-level comment above -- this only gates on an approval if
+    # the owner has configured a matching GitHub Environment with required
+    # reviewers. Absent that, this job runs immediately.
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Build (OpenNext Cloudflare)
+        run: npm run build:cf
+
+      - name: Record release manifest
+        run: |
+          node scripts/generate-release-manifest.mjs \
+            --target "${{ inputs.target }}" \
+            --commit "${{ github.sha }}" \
+            --actor "${{ github.actor }}" \
+            --run-id "${{ github.run_id }}"
+
+      - name: Upload release manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest-${{ inputs.target }}-${{ github.run_id }}
+          path: .release-manifest/*.json
+
+      # Deliberately NOT run yet: `wrangler deploy --env ${{ inputs.target }}`.
+      # Standing owner policy (see docs/infrastructure/V08-04_CLOUDFLARE_ENVIRONMENTS.md):
+      # no Cloudflare environment -- staging OR production -- is deployed
+      # until the full V1.2 roadmap has passed acceptance. This job builds
+      # and records a manifest so the pipeline shape is real and rehearsable
+      # via dry-run, but the actual deploy line is commented out until that
+      # gate lifts and the owner explicitly re-enables it.
+      # - name: Deploy
+        run: npx wrangler deploy --env ${{ inputs.target }}
+
+      - name: Dry-run deploy (real gate today)
+        # run: npx wrangler deploy --env ${{ inputs.target }} --dry-run --outdir .wrangler/dry-run-${{ inputs.target }}

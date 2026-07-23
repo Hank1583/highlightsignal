@@ -2,9 +2,18 @@
 
 # Workspace Database
 
+> **V12-06 note (2026-07-22)**: this is a pre-implementation Draft written
+> before the real MySQL schema existed (UUID PKs, `plan`/`timezone`/`locale`
+> columns, JSONB `workspace_settings`) — it does not match what actually
+> shipped. Real schema: `backend/sql/migrations/010_v1_foundation.sql`
+> (`workspaces`: `BIGINT UNSIGNED AUTO_INCREMENT` id, `owner_member_id`, no
+> `plan`/`timezone`/`locale`; `workspace_settings`: `locale`, `timezone`,
+> `settings` TEXT only). Treat this file as historical design intent, not a
+> current reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: Database Specification
 

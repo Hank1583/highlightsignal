@@ -2,9 +2,22 @@
 
 # Audit Log Database
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (`audit_entities`/
+> `audit_event_types`/`system_events` lookup tables, polymorphic UUID
+> `entity_id`) — does not match what actually shipped. Real schema:
+> `audit_logs` (`migrations/010`, indexed further by
+> `036_audit_log_search_index.sql`) has a plain `event_type VARCHAR(100)`
+> (no FK lookup table), `entity_type`/`entity_id` are plain VARCHAR (not
+> UUID), `metadata_json` is `TEXT` (not JSONB), and there is no
+> `system_events` table anywhere. Real API: only
+> `GET /api/v1/workspaces/{workspaceId}/audit-logs` exists (read-only,
+> `backend/api/public/index.php`) — see `docs/6.api/09_Audit_Log_API.md`'s
+> own note for the full route gap. Treat this file as historical design
+> intent, not a current reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: Database Specification
 

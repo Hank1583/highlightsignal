@@ -1,5 +1,13 @@
 # 10_Deployment_Infrastructure
 
+> **V12-03 note (2026-07-22)**: this document's "Future Evolution" section
+> described CI/CD as something to "導入" (introduce) later. That has since
+> been built — see `11_Release_Promotion_Runbook.md` for the real,
+> executable environment mapping, release order, PHP/SQL manual promotion
+> procedure, and rollback/fix-forward matrix. This document remains the
+> high-level design reference; the runbook is the concrete procedure to
+> actually follow.
+
 Version: v1.0
 
 Status: Stable

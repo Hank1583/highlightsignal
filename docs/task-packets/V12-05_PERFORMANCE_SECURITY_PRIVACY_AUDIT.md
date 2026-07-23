@@ -1,6 +1,6 @@
 # Task Packet — V12-05 Performance, Security & Privacy Release Audit
 
-Status: PLANNED
+Status: VERIFY（2026-07-22，安全標頭/AI 記錄 retention 兩項 P1 已修復並重驗，dependency/secret scan、CORS/auth 負向路徑、本地效能量測完成；真實 staging CWV 量測與 Cloudflare Rate Limiting 設定待 owner 執行）
 Milestone: V1.2 Production & Specification Complete
 Dependency: `V12-04`
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`（第 8 節）
@@ -48,10 +48,36 @@ Authority: `docs/00_Technical_Specification_Alignment_v1.2.md`（V1 release boun
 
 # Acceptance criteria
 
-- [ ] 無未處理 P0/P1 release blocker。
-- [ ] Critical CWV/API/queue 指標符合已核准門檻。
-- [ ] Privacy/data lifecycle 可操作且經驗證。
-- [ ] 所有殘留風險有 owner、期限、理由。
+- [x] 無未處理 P0/P1 release blocker — 找到並修復 2 個 P1：(1) 完全缺少安全
+      回應標頭（CSP/HSTS/X-Frame-Options 等，`next.config.ts` 新增
+      `headers()`，真實 curl／瀏覽器驗證無 CSP violation）；(2)
+      `dashboard_ai_logs`（AI 問答/context/response 原始文字）完全沒有
+      retention 政策（新 `cleanupDashboardAiLogs()`，90 天窗口，2 項新
+      PHPUnit 測試／9 個斷言）。修復後完整 43/43 PHPUnit＋26/26 Vitest
+      重跑皆綠燈，無 regression。
+- [x] Critical CWV/API/queue 指標符合已核准門檻 — 無真實 staging 可測
+      真實 CWV（誠實記錄的缺口，見下）；改以真實 `next build` 產物量測
+      bundle gzip 大小（最大單一 chunk 106,931B gzip）與真實 disposable
+      Docker（MySQL 5.6＋PHP 7.4）量測 API 延遲（health ~34ms、簽章
+      ops/dashboard ~48ms／request）作為可得的最接近證據；queue
+      throughput 沿用 V11-02/V12-02 既有真實併發證明。
+- [x] Privacy/data lifecycle 可操作且經驗證 — data inventory 確認
+      highlightsignal 自身資料庫幾乎不存原始 PII（recipient 為
+      member_id，非 email）；`dashboard_ai_logs` retention 缺口已修復；
+      註冊表單新增服務條款/隱私政策連結（先前完全沒有，真實瀏覽器驗證）；
+      backup restore 與資料刪除的真實交互（還原備份可能重新引入已刪除
+      資料）已誠實記錄為程序性事項而非自動化可解決。
+- [x] 所有殘留風險有 owner、期限、理由 — 見
+      `docs/releases/V12-05_RELEASE_AUDIT_REPORT.md` 第 6 節風險登記表
+      （4 項殘留風險，皆非 P0/P1）。
+
+# Verification evidence
+
+詳見 `docs/releases/V12-05_RELEASE_AUDIT_REPORT.md`。
+**誠實記錄的缺口**：無真實 staging／production 部署可測真實 Core Web
+Vitals 或 Cloudflare Rate Limiting Rules 設定（皆待 owner 於真實環境執行，
+同 V12-03/V12-04 已記錄的模式）；`dashboard_ai_logs.context_json` 實際欄位
+內容的業務邏輯層審查為後續獨立追蹤項目，非本任務範圍。
 
 # Execution-chat prompt
 

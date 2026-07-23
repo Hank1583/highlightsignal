@@ -2,9 +2,21 @@
 
 # Recommendation API
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (documents
+> `POST .../recommendations/{id}/accept|start|complete|dismiss`,
+> `.../actions`, `.../feedback` as a dedicated Recommendation resource) —
+> does not match what actually shipped. There is no per-recommendation
+> lifecycle API at all — Recommendation, Decision, and Action are unified
+> behind `GET/PATCH /api/v1/workspaces/{workspaceId}/dashboard/workflow`
+> (`WorkflowController`/`WorkflowService`, `backend/api/public/index.php`),
+> a completely different resource shape than this doc describes. See
+> `docs/5.database/06_Recommendation_Database.md`'s own note for the
+> matching real schema. Treat this file as historical design intent, not a
+> current reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: API Specification
 

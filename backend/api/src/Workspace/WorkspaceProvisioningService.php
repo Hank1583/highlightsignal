@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace HighlightSignal\Workspace;
 
+use HighlightSignal\Audit\AuditLogger;
 use mysqli;
 use mysqli_sql_exception;
 use RuntimeException;
@@ -20,10 +21,12 @@ final class WorkspaceProvisioningService
     const MAX_SLUG_ATTEMPTS = 5;
 
     private $database;
+    private $auditLogger;
 
     public function __construct(mysqli $database)
     {
         $this->database = $database;
+        $this->auditLogger = new AuditLogger($database);
     }
 
     /** @return array{id: int, public_id: string, name: string, slug: string} */
@@ -83,6 +86,11 @@ final class WorkspaceProvisioningService
                 );
                 $mapping->bind_param('ii', $memberId, $workspaceId);
                 $mapping->execute();
+
+                // V11-07: workspace creation had zero audit coverage before
+                // this task, despite being the entry point for every other
+                // Workspace-scoped mutation that follows it.
+                $this->auditLogger->record($workspaceId, $memberId, 'workspace.provisioned', 'Workspace', $publicId, array('slug' => $slug));
 
                 $this->database->commit();
 

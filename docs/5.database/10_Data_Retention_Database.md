@@ -2,9 +2,24 @@
 
 # Data Retention Database
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (four separate
+> configurable tables: `retention_policies`, `archive_jobs`,
+> `deletion_jobs`, `retention_history`, with per-entity archive/delete-day
+> policies) — does not match what actually shipped. Real schema:
+> `backend/sql/migrations/037_retention_cleanup_runs.sql` — a single
+> append-only `retention_cleanup_runs` ledger (`data_class`, mode
+> `dry_run`/`delete`, `matched_count`/`deleted_count`); retention windows
+> are hardcoded constants in `RetentionCleanupService`, not a configurable
+> policy table, and there is no archive/restore workflow (V11-08's own
+> `restore` mechanism is a full `mysqldump` restore, not per-row archive).
+> See `docs/task-packets/V11-08_RETENTION_CLEANUP_BACKUP_JOBS.md` and
+> `docs/8.infrastructure/12_Observability_Runbook.md` for the real
+> mechanism. Treat this file as historical design intent, not a current
+> reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: Database Specification
 

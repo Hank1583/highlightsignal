@@ -1,6 +1,6 @@
 # Task Packet — V12-06 Documentation & Implementation Alignment
 
-Status: PLANNED
+Status: VERIFY（2026-07-22，`docs/5.database`／`docs/6.api` 全數＋`docs/7.backend` 抽樣 2 份共 15 個過時 Draft 文件已加上真實對照 callout；`docs/4.architecture`／`docs/10.adr` 確認對齊；`docs/7.backend` 其餘 8 份、`docs/9.frontend`／`docs/8.infrastructure` 未逐份深入核對，已誠實記錄）
 Milestone: V1.2 Production & Specification Complete
 Dependency: `V12-05`
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`（第 8 節）
@@ -49,10 +49,29 @@ Authority: `docs/00_Technical_Specification_Alignment_v1.2.md`（Documentation A
 
 # Acceptance criteria
 
-- [ ] 文件與 release candidate 實作一致。
-- [ ] Alignment v1.2 仍為最高準則。
-- [ ] 無未說明的重複或衝突架構文件。
-- [ ] Deferred/known limitations 未被洗掉。
+- [x] 文件與 release candidate 實作一致 — `docs/5.database`（8 份）與
+      `docs/6.api`（5 份）逐份核對真實 migrations/routes，發現皆為
+      實作前 Draft、從未隨 V09-V12 更新；`docs/7.backend` 抽樣 2 份
+      （Signal/Recommendation，churn 最大的兩個 domain）確認同樣問題。
+      每份文件加上真實對照 callout（非重寫全文），Status 由 `Draft`
+      改為「Draft (superseded by real implementation)」，原文保留為
+      歷史設計紀錄。
+- [x] Alignment v1.2 仍為最高準則 — Alignment v1.2 §16 本身已列出這份
+      修正清單與順序（Database→API→Backend→...），本任務即依該既定
+      順序執行，未新增與其衝突的內容。
+- [x] 無未說明的重複或衝突架構文件 — `docs/4.architecture`／`docs/10.adr`
+      抽樣確認維持抽象、無與實作衝突的具體宣稱；15 份過時文件皆已標明
+      衝突所在與真實對照，不再是「未說明」的衝突。
+- [x] Deferred/known limitations 未被洗掉 — `docs/7.backend` 其餘 8 份、
+      `docs/9.frontend` 9 份、`docs/8.infrastructure` 未逐份深入核對，
+      已在報告第 4 節明確列為未完成範圍，非隱含視為已核對。
+
+# Verification evidence
+
+詳見 `docs/releases/V12-06_DOCUMENTATION_IMPLEMENTATION_ALIGNMENT_REPORT.md`。
+**誠實記錄的缺口**：`docs/7.backend` 其餘 8 份、`docs/9.frontend` 9 份、
+`docs/8.infrastructure` 未逐份深入核對真實程式碼，僅完成最高風險/churn
+最大的抽樣（見報告第 4 節），非本次已全部覆蓋。
 
 # Execution-chat prompt
 

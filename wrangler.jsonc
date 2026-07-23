@@ -34,6 +34,11 @@
       }
     },
     "production": {
+      // Overrides Wrangler's default "<name>-<env>" naming (which would be
+      // "highlightsignal-production") -- this deploys to the Worker already
+      // bound to highlightsignal.com and receiving real traffic, instead of
+      // a second, differently-named Worker with no route attached.
+      "name": "highlightsignal",
       "workers_dev": false,
       "vars": {
         "ENVIRONMENT": "production",
@@ -46,7 +51,7 @@
       "services": [
         {
           "binding": "WORKER_SELF_REFERENCE",
-          "service": "highlightsignal-production"
+          "service": "highlightsignal"
         }
       ],
       "secrets": {

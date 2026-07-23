@@ -20,6 +20,12 @@ const eslintConfig = [
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // V12-02: backend/ is a PHP project (linted via `php -l`/
+    // `composer lint`, not ESLint) -- backend/api/vendor/ in particular
+    // ships bundled third-party JS assets (PHPUnit's HTML coverage report
+    // templates) that were never meant to be policed by this project's
+    // JS/TS lint rules.
+    "backend/**",
   ]),
 ];
 

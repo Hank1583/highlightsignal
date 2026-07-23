@@ -163,7 +163,125 @@ never touch it:
     `backend/api/src/Dashboard/WorkflowRepository.php`/`WorkflowService.php`
     for the `recommendations.status` mapping table (a smaller, unrelated
     ENUM) and the idempotency-key short-circuit.
-34. `manual_apply_bookkeeping.sql` — **the actual procedure on this hosting
+34. `preflight_v11_01_action_task_inventory.sql` /
+    `migrations/029_action_manual_task_lifecycle.sql` /
+    `migrations/030_action_manual_task_backfill.sql` /
+    `postflight_v11_01_action_task_invariants.sql` — V11-01 Action & Manual
+    Task Lifecycle. `actions` is a brand-new table (real NOT NULL FKs from
+    creation, one Action per Decision via `UNIQUE(decision_id)` — idempotent
+    by construction). `tasks` gets a nullable expand
+    (`action_id`/`completion_note`) plus a widened `status` ENUM (adds
+    `blocked`), same discipline as every prior expand-on-a-live-table
+    migration — `recommendation_id` stays NOT NULL and dual-written, so
+    every existing read-by-recommendation_id call site is unaffected. `030`
+    backfills `action_id` for every pre-existing Task by recovering its
+    authorizing accepted/modified Decision (the one `create_task` always
+    implicitly recorded). See
+    `backend/api/src/Dashboard/WorkflowService.php`'s `TASK_STATUS_TRANSITIONS`
+    for the Task lifecycle state machine (`completed` is never a
+    directly-settable target — only step-completion sets it) and
+    `backend/api/src/Action/ActionRepository.php` for Action's own,
+    deliberately separate lifecycle.
+35. `preflight_v11_02_queue_inventory.sql` /
+    `migrations/031_queue_worker_reliability_expand.sql` /
+    `postflight_v11_02_queue_invariants.sql` — V11-02 MySQL Queue Worker
+    Reliability. Expands the already-live `queue_jobs` table (migrations/010
+    — it has existed since V0.9 but no application code has ever written to
+    it) with `idempotency_key` (opt-in per-workspace dedup, same NULL-is-
+    distinct design as `decisions.idempotency_key`) and `handler_version`.
+    Everything else (atomic claim, retry/backoff, dead-letter, stuck-job
+    recovery) is implemented entirely in
+    `backend/api/src/Queue/QueueRepository.php`/`QueueService.php` against
+    columns that already existed — see
+    `backend/sql/VERIFICATION_RUNBOOK.md` §14 for the full design and a
+    real two-process concurrency rehearsal.
+36. `preflight_v11_03_execution_result_inventory.sql` /
+    `migrations/032_execution_result_persistence.sql` /
+    `postflight_v11_03_execution_result_invariants.sql` — V11-03 Execution
+    Result. Brand-new table (real FKs from creation, no expand/backfill) —
+    `execution_results` supports EITHER a Task OR a Queue Job as its source
+    (`task_id`/`queue_job_id`, exactly one set — MySQL 5.6 cannot enforce
+    that as a CHECK constraint, so `ExecutionResultService` enforces it in
+    code; the postflight file's own query is the real invariant check).
+    `UNIQUE(task_id, attempt)`/`UNIQUE(queue_job_id, attempt)` make the
+    source's own attempt number the natural idempotency key. See
+    `backend/api/src/Execution/ExecutionResultService.php` for redaction
+    (Bearer/API-key/password patterns) and the 4KB size limit applied before
+    anything is persisted.
+37. `preflight_v11_04_business_outcome_metric_inventory.sql` /
+    `migrations/033_business_outcome_metric_persistence.sql` /
+    `postflight_v11_04_business_outcome_metric_invariants.sql` — V11-04
+    Business Outcome (formal, Action-linked, multi-metric). Brand-new,
+    ADDITIVE `business_outcome_metrics` table — the legacy
+    `business_outcomes` table (migrations/012, one row per Task, a JSON
+    blob) is left completely untouched; see migrations/033's header for why
+    that design was chosen over reshaping a table the shipped V10-04~06 UI
+    already reads. `UNIQUE(action_id, metric_key)` gives "one Action, many
+    Outcome metrics" real grain; baseline is write-once
+    (`BusinessOutcomeMetricRepository::createBaseline()`'s early return);
+    `status='unavailable'` is the fail-closed state when a real measurement
+    can't be fetched.
+38. `preflight_v11_05_evaluation_inventory.sql` /
+    `migrations/034_evaluation_feedback_persistence.sql` /
+    `postflight_v11_05_evaluation_invariants.sql` — V11-05 Evaluation &
+    Feedback. Brand-new `evaluations` table holding BOTH system-computed
+    Evaluation and human Feedback rows (`source` discriminates), append-only
+    (a re-evaluation is a new row, never an UPDATE). No FK on `subject_id`
+    (polymorphic across Recommendation/Decision/Task/Action) — every read/
+    write is workspace-scoped instead, same pattern `signals.source_ref_id`
+    already uses for its own polymorphic pointer. See
+    `backend/api/src/Evaluation/EvaluationService.php` for the 6 basic
+    metrics (adoption/decision outcome/task completion/outcome achievement/
+    time-to-decision/time-to-outcome) and the structural guarantee that
+    nothing here can trigger a Decision/Action/model update.
+39. `preflight_v11_06_notification_inventory.sql` /
+    `migrations/035_notification_persistence.sql` /
+    `postflight_v11_06_notification_invariants.sql` — V11-06 Notification.
+    Three brand-new tables — `notifications` (dedup via
+    `UNIQUE(workspace_id, recipient_member_id, dedup_key)`),
+    `notification_preferences` (opt-out for `in_app`, opt-in for `email`),
+    `notification_deliveries` (`UNIQUE(notification_id, channel)`, `email`
+    delivered via V11-02's Queue — never a synchronous provider call). See
+    `backend/api/src/Notification/EmailDeliveryHandler.php` — a documented
+    stub with no real provider wired up, so email delivery honestly fails
+    and dead-letters rather than fabricating success.
+40. `preflight_v11_07_audit_log_inventory.sql` /
+    `migrations/036_audit_log_search_index.sql` /
+    `postflight_v11_07_audit_log_invariants.sql` — V11-07 Audit Log Complete
+    Coverage. No new table — `audit_logs` has existed since migrations/010
+    and stays append-only (grep-verified: no UPDATE/DELETE call site
+    anywhere). Adds one converged writer
+    (`backend/api/src/Audit/AuditLogger.php`, redaction + size-limit +
+    schema-versioned metadata) that every mutation site now goes through
+    instead of four independent hand-rolled `audit()` methods, a
+    Workspace-scoped read/search API (`AuditController`/`AuditRepository`,
+    gated behind the new `audit.read` permission — owner/admin only, see
+    `WorkspacePermissions`), and one additive index
+    (`idx_audit_logs_workspace_event`) supporting the new `event_type`
+    filter. `WorkflowService::mutate()` now emits one granular audit event
+    per real Decision/Action/Task/Outcome change instead of a single generic
+    `"Dashboard Workflow {action}"` row.
+41. `preflight_v11_08_retention_inventory.sql` /
+    `migrations/037_retention_cleanup_runs.sql` /
+    `postflight_v11_08_retention_invariants.sql` — V11-08 Retention,
+    Cleanup & Backup Jobs. One brand-new table, `retention_cleanup_runs`
+    (nullable `workspace_id` — a batch can span multiple workspaces, or be
+    workspace-agnostic entirely, e.g. `service_request_nonces`). See
+    `backend/api/src/Retention/RetentionCleanupService.php` — dry-run by
+    default, 4 real data classes cleaned (expired nonces, terminal Queue
+    Jobs, old Execution Results, acted-upon Notifications), a Queue Job
+    still referenced by `execution_results`/`notification_deliveries`
+    (`ON DELETE RESTRICT`) is correctly excluded rather than throwing an FK
+    error, a dead-lettered Queue Job requires an explicit owner-approval env
+    var before it is ever included, and an unread Notification is never
+    touched regardless of age. Triggered via a new signed
+    `POST /api/v1/retention/run` endpoint (same `WorkerRequestAuthenticator`
+    as `/api/v1/queue/run`, no member/workspace identity — this is a
+    system-wide sweep). Backup/restore is a documented, owner-run
+    phpMyAdmin-export procedure (no SSH/cron on this host) — see
+    `VERIFICATION_RUNBOOK.md` section 20 for the real disposable restore
+    rehearsal (RPO/RTO, row counts, checksums).
+42. `manual_apply_bookkeeping.sql` — **the actual procedure on this hosting
     plan today** (no SSH/cron). Paste each migration into phpMyAdmin by hand,
     then run this file's matching bookkeeping row so `schema_migrations`
     stays accurate. See `VERIFICATION_RUNBOOK.md`.

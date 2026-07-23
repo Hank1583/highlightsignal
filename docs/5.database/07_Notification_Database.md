@@ -2,9 +2,18 @@
 
 # Notification Database
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (a
+> `notification_channels` lookup table with JSONB `configuration`) — does
+> not match what actually shipped. Real schema:
+> `backend/sql/migrations/035_notification_persistence.sql` — `channel` is
+> a plain `ENUM('in_app','email')` column directly on
+> `notification_preferences`/`notification_deliveries`, no separate channel
+> lookup table. Treat this file as historical design intent, not a current
+> reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: Database Specification
 

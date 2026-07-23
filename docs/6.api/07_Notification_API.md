@@ -2,9 +2,21 @@
 
 # Notification API
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (documents
+> `POST .../notifications/{id}/acknowledge|retry` and
+> `GET .../notifications/{id}/deliveries`) — does not match what actually
+> shipped. Real routes (`backend/api/public/index.php`,
+> `NotificationController`): index, `{notificationId}/read`,
+> `{notificationId}/dismiss`, and `preferences` GET/PATCH — no
+> acknowledge/retry action or a delivery-history sub-route. Delivery
+> attempts are visible only via `notification_deliveries` rows, not a
+> dedicated endpoint. See `docs/5.database/07_Notification_Database.md`'s
+> own note for the matching real schema. Treat this file as historical
+> design intent, not a current reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: API Specification
 

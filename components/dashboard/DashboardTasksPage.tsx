@@ -20,6 +20,8 @@ type WorkflowStep = {
   status: "pending" | "completed";
 };
 
+type TaskStatus = "pending" | "in_progress" | "blocked" | "completed" | "cancelled";
+
 type WorkflowItem = {
   context_key: string;
   recommendation: {
@@ -33,7 +35,8 @@ type WorkflowItem = {
     id: number;
     title?: string;
     description?: string;
-    status?: string;
+    status?: TaskStatus;
+    completion_note?: string | null;
     steps?: WorkflowStep[];
   } | null;
   outcome: {
@@ -67,11 +70,31 @@ function getErrorMessage(json: any, fallback: string) {
 function statusLabel(status?: string) {
   if (status === "completed") return "已完成";
   if (status === "in_progress") return "進行中";
+  if (status === "blocked") return "已封鎖";
   if (status === "cancelled") return "已取消";
   if (status === "accepted") return "已同意";
   if (status === "skipped") return "已略過";
   return "待處理";
 }
+
+// V11-01: mirrors WorkflowService::TASK_STATUS_TRANSITIONS -- the backend is
+// the actual authority (illegal transitions are rejected there regardless of
+// what this renders), this only avoids offering a button that would 400.
+const TASK_STATUS_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
+  pending: ["in_progress", "blocked", "cancelled"],
+  in_progress: ["blocked", "cancelled"],
+  blocked: ["in_progress", "cancelled"],
+  completed: [],
+  cancelled: [],
+};
+
+const taskActionLabels: Record<TaskStatus, string> = {
+  pending: "標記為進行中",
+  in_progress: "標記為進行中",
+  blocked: "標記為封鎖",
+  completed: "標記為完成",
+  cancelled: "取消任務",
+};
 
 function outcomeLabel(status?: string) {
   if (status === "measured") return "已衡量";
@@ -182,6 +205,40 @@ export default function DashboardTasksPage() {
     }
   };
 
+  const updateTaskStatus = async (item: WorkflowItem, status: TaskStatus, note?: string) => {
+    if (!item.task) return;
+    const busyKey = `${item.context_key}:status`;
+    try {
+      setBusyStep(busyKey);
+      setErrorText("");
+      const response = await fetch(`/api/workspaces/${currentWorkspace.id}/dashboard/workflow`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          context_key: item.context_key,
+          action: "update_task",
+          title: item.recommendation?.title || item.task.title || "Dashboard task",
+          task_id: item.task.id,
+          status,
+          completion_note: note ?? undefined,
+        }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json?.ok || !json?.data) {
+        throw new Error(getErrorMessage(json, "更新任務狀態失敗。"));
+      }
+      setItems((current) =>
+        current.map((candidate) =>
+          candidate.context_key === item.context_key ? (json.data as WorkflowItem) : candidate
+        )
+      );
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : "更新任務狀態失敗。");
+    } finally {
+      setBusyStep("");
+    }
+  };
+
   useEffect(() => {
     // Clear the previous Workspace's tasks immediately on switch; loadTasks
     // below already sets loading=true, which gates the list render, but this
@@ -281,6 +338,7 @@ export default function DashboardTasksPage() {
               item={item}
               busyStep={busyStep}
               onToggleStep={toggleStep}
+              onUpdateStatus={updateTaskStatus}
             />
           ))
         )}
@@ -313,14 +371,29 @@ function TaskCard({
   item,
   busyStep,
   onToggleStep,
+  onUpdateStatus,
 }: {
   item: WorkflowItem;
   busyStep: string;
   onToggleStep: (item: WorkflowItem, step: WorkflowStep) => Promise<void>;
+  onUpdateStatus: (item: WorkflowItem, status: TaskStatus, note?: string) => Promise<void>;
 }) {
   const steps = item.task?.steps || [];
   const percent = progressPercent(item);
   const label = workflowContexts.find((context) => context.key === item.context_key)?.label || item.context_key;
+  const taskStatus = (item.task?.status || "pending") as TaskStatus;
+  const nextStatuses = TASK_STATUS_TRANSITIONS[taskStatus] || [];
+  const statusBusy = busyStep === `${item.context_key}:status`;
+  const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null);
+  const [note, setNote] = useState("");
+
+  const confirmStatus = () => {
+    if (!pendingStatus) return;
+    void onUpdateStatus(item, pendingStatus, note.trim() || undefined).then(() => {
+      setPendingStatus(null);
+      setNote("");
+    });
+  };
 
   return (
     <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -343,12 +416,68 @@ function TaskCard({
               {item.recommendation?.description || item.task?.description}
             </p>
           ) : null}
+          {item.task?.completion_note ? (
+            <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+              備註：{item.task.completion_note}
+            </p>
+          ) : null}
         </div>
         <div className="min-w-36 rounded-2xl bg-slate-50 p-4 text-center">
           <p className="text-3xl font-black text-slate-950">{percent}%</p>
           <p className="mt-1 text-xs font-bold text-slate-500">完成度</p>
         </div>
       </div>
+
+      {item.task && nextStatuses.length > 0 ? (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          {!pendingStatus ? (
+            <div className="flex flex-wrap gap-2">
+              {nextStatuses.map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setPendingStatus(status)}
+                  disabled={statusBusy}
+                  className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700 disabled:opacity-50"
+                >
+                  {taskActionLabels[status]}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <input
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder={`${taskActionLabels[pendingStatus]}的原因（選填）`}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={confirmStatus}
+                  disabled={statusBusy}
+                  className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+                >
+                  {statusBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  確認{taskActionLabels[pendingStatus]}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingStatus(null);
+                    setNote("");
+                  }}
+                  disabled={statusBusy}
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-600 disabled:opacity-50"
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {steps.length > 0 ? (
         <div className="mt-5 space-y-2">

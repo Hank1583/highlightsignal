@@ -13,6 +13,71 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # V12-02: backend PHP suite runs as its own job so a real MySQL 5.6
+  # service container can be provisioned via `services:` -- this is CI's
+  # equivalent of every V10/V11 task's disposable `docker run mysql:5.6`
+  # rehearsal, just now a permanent, always-on gate instead of a one-off
+  # manual run. Independent of the `verify` job below; both must pass.
+  backend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:5.6
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: highlightsignal_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -prootpass"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "7.4"
+          extensions: mysqli, json
+          coverage: none
+
+      - name: Install locked PHP dependencies
+        working-directory: backend/dev
+        run: composer install --no-interaction --prefer-dist
+
+      - name: PHP lint (composer lint)
+        working-directory: backend/dev
+        run: composer lint
+
+      - name: Apply disposable test schema
+        working-directory: backend/dev
+        env:
+          TEST_DB_HOST: 127.0.0.1
+          TEST_DB_USER: root
+          TEST_DB_PASSWORD: rootpass
+          TEST_DB_NAME: highlightsignal_test
+        run: php bin/apply_test_schema.php
+
+      - name: PHPUnit (unit + integration)
+        working-directory: backend/dev
+        env:
+          TEST_DB_HOST: 127.0.0.1
+          TEST_DB_USER: root
+          TEST_DB_PASSWORD: rootpass
+          TEST_DB_NAME: highlightsignal_test
+        run: composer test
+
+      - name: Upload PHPUnit JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phpunit-junit
+          path: backend/dev/.phpunit.cache/junit.xml
+          if-no-files-found: warn
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -41,6 +106,17 @@ jobs:
 
       - name: TypeScript
         run: npm run typecheck
+
+      - name: Frontend unit/BFF tests (Vitest)
+        run: npm run test
+
+      - name: Upload Vitest JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-junit
+          path: .vitest-cache/junit.xml
+          if-no-files-found: warn
 
       - name: Next production build
         run: npm run build

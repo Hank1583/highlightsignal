@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace HighlightSignal\Integration\GoogleAnalytics;
 
+use HighlightSignal\Audit\AuditLogger;
 use HighlightSignal\Auth\ServiceIdentity;
 use HighlightSignal\Http\ValidationException;
 use HighlightSignal\Workspace\WorkspacePermissions;
@@ -13,11 +14,13 @@ final class GaIntegrationService
 {
     private $database;
     private $repository;
+    private $auditLogger;
 
     public function __construct(mysqli $database, GaIntegrationRepository $repository)
     {
         $this->database = $database;
         $this->repository = $repository;
+        $this->auditLogger = new AuditLogger($database);
     }
 
     public function listConnections(int $workspaceId, bool $includeInactive): array
@@ -45,27 +48,15 @@ final class GaIntegrationService
                 $status
             );
 
-            $eventType = 'GA Integration Status Updated';
-            $entityType = 'WorkspaceIntegration';
-            $entityId = (string) $connectionId;
-            $requestId = $identity->nonce;
-            $metadata = json_encode(array('status' => $status));
-            $audit = $this->database->prepare(
-                'INSERT INTO audit_logs
-                 (workspace_id, actor_member_id, event_type, entity_type, entity_id, request_id, metadata_json)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)'
-            );
-            $audit->bind_param(
-                'iisssss',
+            $this->auditLogger->record(
                 $identity->workspaceId,
                 $identity->memberId,
-                $eventType,
-                $entityType,
-                $entityId,
-                $requestId,
-                $metadata
+                'integration.ga_status_updated',
+                'WorkspaceIntegration',
+                (string) $connectionId,
+                array('status' => $status),
+                $identity->nonce
             );
-            $audit->execute();
             $this->database->commit();
 
             return $connection;

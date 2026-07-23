@@ -98,11 +98,26 @@ final class ServiceRequestAuthenticator
         }
         $expiresAt = $timestamp + Environment::integer('SERVICE_AUTH_TTL_SECONDS', 60);
         $statement->bind_param('sii', $nonce, $timestamp, $expiresAt);
-        if (!$statement->execute()) {
-            if ((int) $statement->errno === 1062) {
+
+        // V12-02: this connection always runs with MYSQLI_REPORT_STRICT
+        // (`ConnectionFactory::create()`) -- under that mode, `execute()`
+        // THROWS a `mysqli_sql_exception` on a duplicate key rather than
+        // returning false, so the `if (!$statement->execute())` check this
+        // method used to have was unreachable dead code (a real replay was
+        // only ever actually caught by the top-level `mysqli_sql_exception`
+        // handler in `public/index.php`, ONE layer higher than this class
+        // claims to handle it -- found via this task's own automated test
+        // suite calling `authenticate()` directly, bypassing that outer
+        // catch). Catching it here makes this class correct on its own,
+        // not just correct because of where its only real caller happens to
+        // sit.
+        try {
+            $statement->execute();
+        } catch (\mysqli_sql_exception $error) {
+            if ((int) $error->getCode() === 1062) {
                 throw new AuthenticationException('Duplicate signed request.');
             }
-            throw new \RuntimeException('Unable to claim service nonce.');
+            throw new \RuntimeException('Unable to claim service nonce.', 0, $error);
         }
 
         $cleanupPercent = Environment::integer('SERVICE_AUTH_NONCE_CLEANUP_PERCENT', 1);

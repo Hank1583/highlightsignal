@@ -10,7 +10,9 @@ if (PHP_SAPI !== 'cli') {
     exit(1);
 }
 
-require dirname(__DIR__) . '/config/bootstrap.php';
+// This script now lives in backend/dev/bin/ -- config/bootstrap.php is a
+// sibling directory's file, backend/api/config/.
+require dirname(__DIR__, 2) . '/api/config/bootstrap.php';
 
 function migrate_cli_usage()
 {

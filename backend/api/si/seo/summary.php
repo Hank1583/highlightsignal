@@ -1005,12 +1005,44 @@ if ($scanJson !== false && $issuesJson !== false) {
 try {
   $signalRepository = new \HighlightSignal\Signal\SignalRepository($conn);
   $signalService = new \HighlightSignal\Signal\SignalService($conn, $signalRepository);
-  $signalService->runSeoTechnicalIssueDetection($workspace_id, $site_id, $issues, $previousIssues);
+  $signalStats = $signalService->runSeoTechnicalIssueDetection($workspace_id, $site_id, $issues, $previousIssues);
 } catch (\Throwable $signalError) {
   // Signal detection must never break the SEO scan response itself -- a
   // missed detection is recoverable on the next scan; failing the whole
   // request because of it is not proportional.
   error_log('Signal detection failed: ' . $signalError->getMessage());
+  $signalStats = array('created' => 0, 'reopened' => 0);
+}
+
+// V11-06: notify the workspace when this scan surfaced a genuinely NEW or
+// reopened problem -- not on every bumped-occurrence-count re-scan, which
+// would notify on every single unchanged re-scan. Same try/catch-protected,
+// non-blocking pattern as every other post-scan side effect on this page.
+if (($signalStats['created'] ?? 0) > 0 || ($signalStats['reopened'] ?? 0) > 0) {
+  try {
+    $notificationRepository = new \HighlightSignal\Notification\NotificationRepository($conn);
+    $notificationService = new \HighlightSignal\Notification\NotificationService(
+      $notificationRepository,
+      new \HighlightSignal\Queue\QueueService(new \HighlightSignal\Queue\QueueRepository($conn), $conn, new \HighlightSignal\Execution\ExecutionResultService(new \HighlightSignal\Execution\ExecutionResultRepository($conn)))
+    );
+    $totalNew = (int) ($signalStats['created'] ?? 0) + (int) ($signalStats['reopened'] ?? 0);
+    $notificationService->notifyWorkspace(
+      $workspace_id,
+      'signal.detected',
+      'warning',
+      sprintf('偵測到 %d 個新的 SEO 技術問題', $totalNew),
+      sprintf('站點 #%d 的最新掃描發現 %d 個新的或重新出現的技術問題，請至決策中心查看。', $site_id, $totalNew),
+      'SeoSite',
+      (string) $site_id,
+      // Day-level dedup, not per-scan -- re-scanning the same site
+      // repeatedly within the same day (a real, common pattern for this
+      // endpoint) must not spam one notification per re-scan; a genuinely
+      // NEW/reopened issue found again tomorrow is correctly a new event.
+      hash('sha256', 'signal.detected:' . $site_id . ':' . substr($currentScannedAt, 0, 10))
+    );
+  } catch (\Throwable $notifyError) {
+    error_log('Notification dispatch failed: ' . $notifyError->getMessage());
+  }
 }
 
 /* ======================================================

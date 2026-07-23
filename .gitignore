@@ -12,6 +12,9 @@
 
 # testing
 /coverage
+/.vitest-cache/
+/backend/dev/.phpunit.cache/
+/.release-manifest/
 
 # next.js
 /.next/
@@ -26,7 +29,7 @@
 /backend/private/
 /backend/api/.env
 /backend/api/storage/
-/backend/api/vendor/
+/backend/dev/vendor/
 /backend/api/ga/report/config.php
 /backend/api/si/seo/business-agent-*.json
 /backend/api/**/*service-account*.json

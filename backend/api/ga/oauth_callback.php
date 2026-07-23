@@ -1,5 +1,6 @@
 <?php
 
+use HighlightSignal\Audit\AuditLogger;
 use HighlightSignal\Config\Environment;
 use HighlightSignal\Workspace\AuthorizationException;
 use HighlightSignal\Workspace\WorkspaceAccessPolicy;
@@ -222,6 +223,20 @@ foreach ($properties["properties"] as $prop) {
 
     $stmt->bind_param("iissss", $member_id, $workspace_id, $property_id, $property_name, $refresh_token, $stream_list);
     $stmt->execute();
+
+    // V11-07: this connect flow (the "activate" half of GA integration) had
+    // zero audit coverage before this task -- only the disable/enable toggle
+    // (GaIntegrationService::updateConnectionStatus()) was audited. Never
+    // include $access_token/$refresh_token in metadata.
+    (new AuditLogger($conn))->record(
+        $workspace_id,
+        $member_id,
+        'integration.ga_connected',
+        'WorkspaceIntegration',
+        $property_id,
+        array('property_name' => $property_name, 'account_id' => $realAccountId),
+        $stateNonce
+    );
 }
 
 

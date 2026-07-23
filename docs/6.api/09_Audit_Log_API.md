@@ -2,9 +2,21 @@
 
 # Audit Log API
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (documents
+> `/audit-logs/{id}`, `/audit-logs/search`, `/audit-logs/timeline`,
+> `/audit-logs/entities/{type}/{id}`, `/audit-logs/export`, plus a whole
+> `/system-events` resource) — drastically overbuilt vs. what actually
+> shipped. `backend/api/public/index.php`'s own comment on the real route
+> states this is deliberately "read-only... no create/update/delete route
+> is registered here or anywhere else for this resource" — exactly one
+> route exists: `GET /api/v1/workspaces/{workspaceId}/audit-logs`. See
+> `docs/5.database/09_Audit_Log_Database.md`'s own note for the matching
+> real schema. Treat this file as historical design intent, not a current
+> reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: API Specification
 

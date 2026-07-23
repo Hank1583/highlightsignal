@@ -1,6 +1,6 @@
 # Task Packet — V11-04 Business Outcome
 
-Status: PLANNED
+Status: VERIFY（程式碼與 SQL 完成、disposable Docker 排練通過（17/17，含真實端到端整合），真實主機套用待 owner 執行）
 Milestone: V1.1 Execution & Operations
 Dependency: `V11-03`
 Tracker: `docs/00_V07_TO_V12_PROGRESS_TRACKER.md`（第 7 節）
@@ -48,10 +48,39 @@ Authority: `docs/00_Technical_Specification_Alignment_v1.2.md`（Business Outcom
 
 # Acceptance criteria
 
-- [ ] Outcome 有 baseline、measurement window、metrics、status。
-- [ ] 與 Action、Result、source 可追溯且語意分離。
-- [ ] 至少一種真實 GA/SEO metric 可測量。
-- [ ] 不進行 Autonomous Learning。
+- [x] Outcome 有 baseline、measurement window、metrics、status — 新建
+      `business_outcome_metrics`（`UNIQUE(action_id, metric_key)`），每個
+      metric 有獨立 baseline_value/baseline_captured_at/target_value/
+      measurement_window_days/actual_value/status/outcome_status。
+- [x] 與 Action、Result、source 可追溯且語意分離 — 表格直接連回 `actions`
+      （而非 Task）；`source_type`/`source_ref`/`calculation_version` 提供
+      來源與計算版本追溯；與 V11-03 Execution Result 完全獨立的表與語意。
+- [x] 至少一種真實 GA/SEO metric 可測量 — 重用 `WorkflowService::metrics()`
+      既有的真實 4 個 GA/SEO metric（sessions/conversions/seo_score/
+      seo_issues），非合成數字；disposable rehearsal 以真實
+      create_task→complete→measure_outcome 流程端到端驗證。
+- [x] 不進行 Autonomous Learning — 本任務只記錄與計算 outcome_status，無任何
+      路徑會回頭修改 Recommendation、Decision 或觸發新的 Action。
+
+# Verification evidence
+
+**設計決策（提前說明）**：任務包提示的「移除/延後既有 task unique constraint」
+會需要改動已上線且被 V10-04~06 UI 讀取的既有 `business_outcomes` 表。改為
+新建 ADDITIVE 的 `business_outcome_metrics` 表（連回 Action，而非 Task），
+在完全不觸碰既有表結構/資料的前提下，於 `create_task`／`measure_outcome`
+兩個既有呼叫點「並存」寫入正式的多 metric 資料。此設計已於
+`backend/sql/VERIFICATION_RUNBOOK.md` 第 16 節與 migration 檔頭完整記錄。
+
+2026-07-21 disposable Docker `mysql:5.6` + local PHP 7.4 CLI 排練
+（17 項斷言全數通過）：baseline 寫入即鎖定（重複提交不同值回傳原值）；
+improved/flat/regressed 在 increase 與 decrease 兩種方向皆正確計算；
+baseline 為正但實測非正時正確標示 unavailable（不猜值）；跨 Workspace 隔離；
+**真實端到端整合**——透過 `WorkflowService` 真實建立任務（含真實 baseline）、
+完成步驟、呼叫 `measure_outcome`（真實 current metrics），確認舊版 blob 與
+新版正式 per-metric 資料「同時」被建立與更新，非取代關係。
+
+**尚未執行（需要正式主機）**：套用 migration 033、上傳 PHP 變更、以真實 GA/
+SEO 資料執行端到端驗證（本次排練使用合理但合成的數字）。
 
 # Execution-chat prompt
 

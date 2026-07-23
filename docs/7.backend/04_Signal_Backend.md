@@ -2,9 +2,22 @@
 
 # Signal Backend
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (module structure
+> lists `SignalSearchController`, `SignalLifecycleController`, plus
+> `SignalClassificationService`, `SignalScoringService`,
+> `SignalDeduplicationService`, `SignalCorrelationService`,
+> `SignalLifecycleService`, `SignalSearchService`,
+> `SignalHistoryRepository`/`SignalRelationshipRepository`) — none of these
+> exist. Real module: `backend/api/src/Signal/` contains only
+> `SignalController.php`, `SignalRepository.php`, `SignalService.php`, plus
+> a `Detector/` subfolder (`GaTrafficAnomalyDetector.php`,
+> `SeoTechnicalIssueDetector.php`) implementing rule-based detection — a
+> much smaller, differently-shaped module than this doc describes. Treat
+> this file as historical design intent, not a current reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: Backend Specification
 

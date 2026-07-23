@@ -2,9 +2,20 @@
 
 # Widget Database
 
+> **V12-06 note (2026-07-22)**: this describes `widgets`/`widget_instances`/
+> `widget_layouts`/`widget_data_cache` as persisted backend tables, but no
+> Widget table has ever existed in this codebase (`grep -i widget
+> backend/sql/migrations/*.sql` returns zero matches) — this isn't drift,
+> it's a domain that was never meant to be a database table. This actually
+> matches `docs/00_Technical_Specification_Alignment_v1.2.md`'s own §11:
+> "Widget 是 Presentation Model，不擁有...Business Data" (Widget is a
+> frontend-only presentation concept). Treat this file as an aspirational
+> draft that the accepted spec has since overridden, not a current or
+> planned backend reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by v1.2 spec — Widget is frontend-only, see note above)
 
 Layer: Database Specification
 

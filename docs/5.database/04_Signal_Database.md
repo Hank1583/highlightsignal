@@ -2,9 +2,25 @@
 
 # Signal Database
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (UUID PK,
+> `signal_type_id`/`source_id` FKs to `signal_types`/`signal_sources`
+> tables, a `priority` column, a separate `signal_status_history` table) —
+> does not match what actually shipped. Real schema:
+> `backend/sql/migrations/024_signal_persistence.sql` — a single `signals`
+> table, `BIGINT UNSIGNED` PK, no `priority` column (deliberately deferred,
+> per that migration's own comment), no `signal_types`/`signal_sources`
+> lookup tables, status is a plain ENUM (`new`/`acknowledged`/`resolved`/
+> `dismissed`), and status-change history is written to `audit_logs`
+> (`entity_type = 'Signal'`, V11-07), not a dedicated history table. Real
+> service/repo: `backend/api/src/Signal/SignalService.php` +
+> `SignalRepository.php` + `Detector/` (rule-based, not the
+> classification/scoring/deduplication/correlation services this doc
+> describes). Treat this file as historical design intent, not a current
+> reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: Database Specification
 

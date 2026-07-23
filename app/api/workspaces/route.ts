@@ -3,6 +3,7 @@ import { highlightPhpApiUrl } from "@/lib/config";
 import { createPhpServiceHeaders } from "@/lib/phpServiceAuth";
 import { getServerSession } from "@/lib/serverSession";
 import { DEMO_READ_ONLY_MESSAGE, isDemoSession } from "@/lib/demo";
+import { provisionDefaultWorkspace } from "@/lib/workspaceProvisioning";
 
 export async function GET(request: Request) {
   const user = await getServerSession(request);
@@ -79,44 +80,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const targetUrl = highlightPhpApiUrl("api/v1/workspaces");
-  const headers = await createPhpServiceHeaders("POST", targetUrl, "", {
-    memberId: user.id,
-    workspaceId: 0,
-  });
+  // V12-01: shared with the registration BFF
+  // (`app/api/auth/register/route.ts`), which calls the same underlying
+  // PHP provisioning proactively right after auto-login, rather than
+  // waiting for this route to be hit reactively.
+  const result = await provisionDefaultWorkspace(user.id);
 
-  try {
-    const response = await fetch(targetUrl, {
-      method: "POST",
-      headers,
-      cache: "no-store",
-    });
-    const text = await response.text();
-
-    try {
-      return NextResponse.json(JSON.parse(text), { status: response.status });
-    } catch {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: "INVALID_PHP_RESPONSE",
-            message: "Backend returned an invalid response",
-          },
-        },
-        { status: 502 }
-      );
-    }
-  } catch {
+  if (!result.ok) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: {
-          code: "PHP_BACKEND_UNAVAILABLE",
-          message: "Backend service is unavailable",
-        },
-      },
+      { ok: false, error: { code: "PHP_BACKEND_UNAVAILABLE", message: result.message } },
       { status: 502 }
     );
   }
+
+  if (result.alreadyProvisioned) {
+    return NextResponse.json(
+      { ok: false, error: { code: "WORKSPACE_ALREADY_PROVISIONED", message: "Workspace already provisioned." } },
+      { status: 409 }
+    );
+  }
+
+  return NextResponse.json({ ok: true });
 }

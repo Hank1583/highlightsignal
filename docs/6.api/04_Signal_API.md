@@ -2,9 +2,20 @@
 
 # Signal API
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (documents
+> `POST .../signals/{id}/resolve|dismiss|reopen|archive` and
+> `GET .../signals/search`) — does not match what actually shipped. Real
+> routes (`backend/api/public/index.php`, `SignalController`): only
+> `GET /api/v1/workspaces/{workspaceId}/signals` and
+> `PATCH /api/v1/workspaces/{workspaceId}/signals/{signalId}` exist — no
+> lifecycle-transition sub-routes, no search endpoint (status transitions go
+> through the one PATCH). See `docs/5.database/04_Signal_Database.md`'s own
+> note for the matching real schema. Treat this file as historical design
+> intent, not a current reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: API Specification
 

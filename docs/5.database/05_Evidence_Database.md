@@ -2,9 +2,19 @@
 
 # Evidence Database
 
+> **V12-06 note (2026-07-22)**: pre-implementation Draft (`evidence_sources`,
+> `evidence_snapshots`, `evidence_relationships` tables, UUID/JSONB) — does
+> not match what actually shipped. `backend/sql/migrations/025_evidence_persistence.sql`'s
+> own comment already names this exact file as an obsolete draft written
+> "for a different UUID/Postgres/JSONB architecture." Real schema: a single
+> `evidence_items` table plus `signal_evidence_links` (BIGINT PKs, a
+> `payload_json` snapshot with a `content_hash` for dedup — no separate
+> sources/snapshots/relationship-graph tables). Treat this file as
+> historical design intent, not a current reference.
+
 Version: v1.0
 
-Status: Draft
+Status: Draft (superseded by real implementation — see note above)
 
 Layer: Database Specification
 
