@@ -23,10 +23,13 @@ final class WorkspacePermissions
      * WorkspaceAccessPolicy::requireActiveMembership() before this matrix is
      * ever consulted) with no further role restriction.
      */
-    private const MATRIX = array(
+    const MATRIX = array(
         'read' => array('owner', 'admin', 'manager', 'member', 'viewer', 'billing', 'external_viewer'),
         'integrations.manage' => array('owner', 'admin', 'manager'),
         'workflow.mutate' => array('owner', 'admin', 'manager', 'member'),
+        // V11-07: an audit trail exposes every OTHER member's actions, not
+        // just the caller's own -- deliberately narrower than 'read'.
+        'audit.read' => array('owner', 'admin'),
     );
 
     public static function allows(string $role, string $action): bool
@@ -35,7 +38,7 @@ final class WorkspacePermissions
     }
 
     /** @param array{role: string} $membership */
-    public static function requirePermission(array $membership, string $action): void
+    public static function requirePermission(array $membership, string $action)
     {
         $role = (string) ($membership['role'] ?? '');
         if (!self::allows($role, $action)) {

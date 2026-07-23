@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/serverSession";
 import { phpGetSiSummary } from "@/lib/si/siApi";
 import { hasSearchIntelligenceAccess } from "@/lib/subscription";
-import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,7 +27,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const workspace = await resolveWorkspaceContext(req, user);
     const body = await req.json();
     const siteId = Number(body.site_id);
     const tab = typeof body.tab === "string" ? body.tab : "overview";
@@ -46,9 +44,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // See aeo/summary/route.ts for why this no longer calls
+    // resolveWorkspaceContext().
     const data = await phpGetSiSummary({
       module: "geo",
-      userId: workspace.legacyOwnerMemberId,
+      userId: Number(user.id),
       siteId,
       tab,
     });

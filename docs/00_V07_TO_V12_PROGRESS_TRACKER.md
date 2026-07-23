@@ -43,12 +43,68 @@ DEFERRED    已決定延後，不計入目前版本
 
 | 欄位 | 目前狀態 |
 |---|---|
-| Last sync | 2026-07-21 |
-| Active milestone | V0.9 — Workspace Foundation（收尾）／V1.0 — Decision Intelligence Core（啟動） |
-| Active task | `V09-01`～`V09-07` DONE；`V09-08`／`V10-01`～`V10-08` 全數程式＋SQL＋disposable rehearsal 完成，狀態 VERIFY（真實主機套用／PHP／前端上傳／真實資料執行待 owner 一次執行）；owner 下達「V10-03→V10-08 GOGOGO」持續執行指令已跑完，V1.0 Decision Intelligence Core 里程碑本身維持 VERIFY（不轉 DONE，見 `V10-08` 驗收報告的唯一缺口說明）；`V08-02` 仍 BLOCKED_EXTERNAL_ROTATION，owner 已接受風險 |
-| Next task | `V09-08`／`V10-01`～`V10-08` 全部 VERIFY 任務待 owner 於真實主機依序執行對應 migration（021-022、024、025、026、027、028）＋上傳 PHP／前端＋跨 Workspace HTTP 測試＋真實瀏覽器登入互動驗證＋至少一條真實資料 golden path 後，V1.0 才可轉 DONE；role 邊界、全新會員 provisioning 與多 Workspace 切換的殘留驗證仍需具備對應測試資料後補測；AEO/GEO Signal 偵測缺 scan-history 持久化層的背景任務已建立建議，待挑選執行；下一個里程碑是 V1.1 Execution & Operations（`V11-01` 起）。**2026-07-21 owner 決定**：現有正式站已知有未指明錯誤，不插隊修復，留到 V1.2 全部完成後換版一次解決（見 `V12-08` 條目）；同時換版把 PHP 路徑從 `/highlightsignal/v2` 改為同網域拿掉 `v2` 的較短路徑，牽動 GA OAuth redirect URI 需重新註冊。 |
-| Blocking issue | 舊 OAuth secret 與其他 V08-02 credentials 仍列為可能曝露；PHP 7.0／URL-only lint 為接受風險；report delivery config 未配置；`V09-08`／`V10-01`～`V10-08` 程式已完成但尚未套用至真實主機——六張 GA reporting tables 仍為 `member_id`-only ownership，`signals`／`evidence_items`／`signal_evidence_links`／`signal_analyses` 表尚未存在於正式環境，`recommendations` 表尚未加上 V10-04 新欄位，`decisions` 表尚未加上 V10-05 新欄位，`V10-06` 的 Decision-first Dashboard UI 與 `V10-07` 的 GA 偵測皆尚未對真實資料/真實登入驗證過——這是 V1.0 milestone 維持 VERIFY 而非 DONE 的唯一原因 |
-| Last verified commit | `0811a25`；GitHub Actions run `29568711140` 全部 PASS（V0.8 為止；V0.9／V1.0 工作尚未 commit） |
+| Last sync | 2026-07-23 |
+| Active milestone | V0.9～V1.1（VERIFY，程式與真實主機套用皆完成，golden path／scheduler 尚待驗證）／V1.2 — Production & Specification Complete（`V12-01`～`V12-06` VERIFY 且已隨真實 cutover 上線；`V12-07` pilot 未執行；`V12-08` 真實 production 換版已完成，見下方 2026-07-23 條目） |
+| Active task | **真實正式環境換版已於 2026-07-23 完成**（見下方新增章節「2026-07-23 真實正式環境部署」）。所有 `V09-08`～`V12-06` 的程式／SQL 現在都已經是真的在跑，不再只是 disposable rehearsal——但尚未逐一走過每個任務自己的真實 golden path 驗證與 scheduler 設定，因此個別任務狀態暫維持 VERIFY，不直接跳 DONE。`V12-07`（Pilot）仍 BLOCKED_NEEDS_REAL_PILOT；`V12-08`（Final Acceptance）的「真實 production 換版」這一步已完成，但完整 checklist 其餘項目（scheduler、pilot、真實告警）尚未全部打勾。`V08-02` 仍 BLOCKED_EXTERNAL_ROTATION，owner 已接受風險。**同日後續 session：第一次真人登入驗證找到並修復 4 個真實 bug（PHP 7.0 ParseError／TypeError、SI `WORKSPACE_FORBIDDEN`、ADS 登入判斷錯誤），見下方「2026-07-23（同日、後續 session）」章節，尚未 commit** |
+| Next task | (1) 用一個真實 Workspace 走一次完整 golden path（註冊→GA 連接→Signal→Evidence→Recommendation→Decision→Action/Task→Result→Outcome）驗證真實環境；(2) 幫 `/api/v1/queue/run` 與 `/api/v1/retention/run` 設定外部排程（GitHub Actions scheduled workflow／Cloudflare Cron Trigger／免費 cron-ping 服務皆可，目前完全沒有排程觸發，queue job 與 retention cleanup 不會自動執行）；(3) `V12-07` 需要真實同意的 pilot 對象才能執行；(4) 兩項 V12-01 發現、待 owner 核准的後續任務：(a) 在共用 4.php 會員系統加 email 驗證/忘記密碼端點，(b) 修復該共用系統的明文 DB 密碼、`update_profile.php` SQL 洩漏、帳號列舉問題 |
+| Blocking issue | 舊 OAuth secret 與其他 V08-02 credentials 仍列為可能曝露；PHP 7.0／URL-only lint 為接受風險；**（2026-07-23 更新，以下不再是阻擋）**~~report delivery config 未配置~~／~~V09-08～V11-08 程式已完成但尚未套用至真實主機~~——真實部署已完成，細節見下方新章節。目前真正的阻擋：queue/retention 排程尚未設定（無自動觸發）、真實告警通道不存在（V12-04 記錄的缺口）、Cloudflare Rate Limiting Rules 未設定（V12-01 owner 決定用 platform 層級但尚未真的設定）、email provider 尚未選型（V11-06 記錄的缺口）、`V12-07` pilot 未執行 |
+| Last verified commit | `0811a25`；GitHub Actions run `29568711140` 全部 PASS（V0.8 為止）。**2026-07-23 真實部署本身是透過本機 `wrangler deploy` 直接推送，不是經由 commit 觸發**——本 session 大量變更（V09-08 之後全部工作）截至目前仍未 commit，見下方新章節 |
+
+---
+
+## 2026-07-23 真實正式環境部署（本節為權威記錄，取代下文所有「真實主機套用待 owner 執行」的舊敘述）
+
+**Database**：25 個 migration（010-016、018-019、021-022、024-037）已透過 phpMyAdmin 逐一手動套用，`schema_migrations` 表 25 筆記錄的 checksum 全數與 `backend/sql/manual_apply_bookkeeping.sql` 比對一致，executor 記錄為 Hank。過程中發現並確認：`ga_connections`／`seo_sites`／`seo_summary_cache`／`seo_scan_history`／`si_sites`／`si_analysis_runs`／`dashboard_ai_logs`／`dashboard_ai_plan_logs`／`seo_pagespeed_cache`／`seo_pagespeed_history`／`recommendations`／`decisions`／`actions`／`tasks`／`queue_jobs` 這些「舊表」的 workspace_id／formalization 欄位有一部分（015、018-019、027、028、029 的 tasks 部分、031）其實早在本 session 之前就已經在真實主機上套用過（推測是功能開發期間手動加的，早於這套 migration bookkeeping 系統存在）——這代表正式站的 schema 比原本文件記錄的更新，不是從零開始。
+
+**Backend/PHP**：`backend/api/**` 已上傳到 `https://www.highlight.url.tw/highlightsignal/`（**已拿掉 `/v2`**，不再是舊的 `.../highlightsignal/v2/`）。同時完成 `backend/api/` 目錄重整——`vendor/`、`tests/`、`bin/`、`composer.json`/`composer.lock`、`phpunit.xml` 全部搬到新的 `backend/dev/`（開發/測試專用，永不上傳），`backend/api/` 現在是 111 個檔案的乾淨真實 payload，上傳不用再排除任何東西。搬動後的路徑修正（composer.json autoload、phpunit.xml coverage、tests/bootstrap.php、bin/lint.php、bin/migrate.php）皆已用真實 disposable Docker 環境驗證過，43/43 PHPUnit 全綠燈，且額外驗證過「只掛載 `backend/api/`（不含 `backend/dev/`）」時 `public/index.php` 的 fallback autoloader 仍正常運作。
+
+**GA OAuth**：`GOOGLE_OAUTH_REDIRECT_URI` 已同步更新並在 Google Cloud Console 重新註冊，配合 PHP 路徑拿掉 `/v2` 的變更。
+
+**Frontend/Cloudflare**：真的部署到 Cloudflare 了。過程中發現 Cloudflare 上其實已經有一個名為 `highlightsignal`（不是 `highlightsignal-production`）的 Worker，綁定 `highlightsignal.com`，且接了 GitHub Git 整合、每次 push 到 `main` 就自動部署——這正是 `docs/8.infrastructure/02_Cloudflare_Infrastructure.md` 記錄的 2026-07-17 意外部署事故的根源。處理方式：
+
+1. 在 `wrangler.jsonc` 的 `env.production` 加上 `"name": "highlightsignal"`，覆蓋 Wrangler 預設的 `highlightsignal-production` 命名，讓 `wrangler deploy --env production` 直接推到這個已經綁好網域的既有 Worker，不用另外處理網域綁定。同時把 `services.WORKER_SELF_REFERENCE` 也改指向 `highlightsignal`。
+2. 在這個 Worker 上設定 4 個必要 secrets（`INTERNAL_KEY`／`JWT_SECRET`／`PAGESPEED_API_KEY`／`PHP_SERVICE_AUTH_SECRET`，取自 `backend/private/frontend.env` 既有值）。
+3. `npm run build:cf` → `wrangler deploy --env production` → 真的推上去了。
+4. Smoke test 全部通過：`https://highlightsignal.com/` 回 200 且帶有 V12-05 新增的安全標頭；`/auth/login`／`/auth/register` 回 200；`/dashboard`（未登入）正確 307 導向 `/auth/login`。
+5. 一開始誤建的 `highlightsignal-production`（沒有綁網域、空的）已確認新版本正常運作後刪除。
+6. **owner 已自行去 Cloudflare Dashboard 把 `highlightsignal` 的 GitHub 自動部署整合斷開**——以後更新一律走 `release-promote.yml`（一旦 GitHub Environment 審核設定完成）或本機手動 `wrangler deploy`，不會再有 push 到 main 就自動上線的風險。
+
+**額外發現（非本次刻意變更，會話外部/linter 已調整）**：`next.config.ts` 的 CSP 已經移到 `middleware.ts`，改成每次請求動態產生 nonce（`script-src 'self' 'nonce-...'`），並把 Google Tag Manager（`www.googletagmanager.com`）與 Cloudflare Web Analytics（`static.cloudflareinsights.com`／`cloudflareinsights.com`）加入允許清單——比 V12-05 當時寫的靜態 CSP 更完整，是實際上線後才會需要的修正（V12-05 原本的 CSP 沒有考慮到這兩個第三方腳本）。
+
+**另一個額外發現（2026-07-23，另一 session，已修正）**：PHP 後端搬到拿掉 `/v2` 的新路徑後，[lib/config.ts](../lib/config.ts) 的 `HIGHLIGHT_PHP_API_BASE_URL` 預設值當時沒有同步更新，仍寫死 `https://www.highlight.url.tw/highlightsignal/v2`——導致「SEO 分數」「今日 Signal」等所有走 `highlightPhpApiUrl()` 的呼叫（`si/seo/*`、`dashboard/workflow` 等）在正式站上打到已不存在的舊路徑，收到 404／`API 回傳不是合法 JSON` 錯誤。用 `www.highlight.url.tw/highlightsignal/v2/...`（404，目錄不存在）vs `www.highlight.url.tw/highlightsignal/...`（500，檔案存在但裸測 GET 未帶簽章導致執行期錯誤）的差異確認根因後，已將預設值改為 `https://www.highlight.url.tw/highlightsignal`。**此修正已於 2026-07-23 同一天重新部署到 Cloudflare production**（Version ID `03a22e39-ef3b-4298-be2c-3386199cc25d`），基本 smoke test（`/`、`/auth/login`、未登入 `/dashboard`／`/seo` 導向）皆通過。**但「SEO 分數」「今日 Signal」實際登入後是否真的恢復正常，尚未有真人登入確認過**——執行部署的 session 沒有真實帳密可以登入測試，這一步需要 owner 自己登入確認。
+
+**尚未完成，不要誤以為已經一起做完**：
+* `lib/config.ts` 的 `/v2` 路徑修正雖已重新部署，「SEO 分數」「今日 Signal」是否真的恢復正常，**下方 2026-07-23（同日、後續 session）條目記錄了第一次真人登入驗證**——確認 SI（AEO/GEO）與 ADS 已恢復正常，但 dashboard/workflow（今日 Signal 所在端點）與 SEO 分數頁面本身仍未被使用者明確確認回傳成功，不算完整驗證完畢。
+* `/api/v1/queue/run`／`/api/v1/retention/run` 完全沒有排程觸發，需要另外設定（GitHub Actions scheduled workflow／Cloudflare Cron Trigger／免費 cron-ping 服務）。
+* `V12-07` Pilot 仍未執行（需要真實同意的 pilot 對象）。
+* 真實告警通道、Cloudflare Rate Limiting Rules、email provider 選型皆仍是記錄在案的缺口，未在這次 cutover 一併解決。
+* 真實 golden path（用一個真實 Workspace 走完整條 Signal→Outcome 鏈路）尚未驗證過。
+* 本 session 所有變更（`V09-08` 之後全部工作，含這次真實部署相關的程式調整）**尚未 commit**。
+
+---
+
+## 2026-07-23（同日、後續 session）：正式站第一次真人登入驗證，找到並修復 4 個真實 bug
+
+上一節部署完成後，這是第一次有真人（owner 本人，帳號 `jouchanghung@gmail.com`／`member_id=1`／`role=admin`）實際登入正式站操作，而不只是 status-only smoke test。過程中依序發現並修復：
+
+1. **PHP 7.0 編譯期 ParseError（`GET .../dashboard/workflow` 500）**：`backend/api/src/Evaluation/EvaluationService.php`（8 處 `: ?array` nullable 回傳型別）與 `backend/api/src/Workspace/WorkspacePermissions.php`（`private const MATRIX`）都是 PHP 7.1+ 才支援的語法，正式主機是 PHP 7.0.x（對應 `backend/api/composer.json` 宣告的 `"php": ">=7.0.26"`）。用 `docker run php:7.0-cli` 對整個 `backend/api/src` 跑 `php -l` 重現出逐字相同的錯誤訊息後確認根因並修復（拿掉 nullable 回傳型別改用 PHPDoc、`private const` 改回單純 `const`）。這兩個檔案只有在 `dashboard/workflow`／`evaluations` 這類會用到 `EvaluationService`／`WorkspacePermissions` 的路由才會被 autoload 觸發編譯，所以其他路由（workspaces 列表、GA 整合等）先前未受影響、未被發現。
+2. **PHP 7.0 執行期 TypeError（同一路由，`bindDynamic()` 回傳值必須是 `HighlightSignal\Signal\void` 的假 class）**：修完第 1 項後才浮現。`php -l` 只做語法檢查，PHP 7.0 沒有 `void` 回傳型別這個關鍵字，語法上會被誤判成「回傳型別是目前 namespace 下一個叫 `void` 的 class」，函式真的執行完沒回傳任何東西時才在**執行期**丟 `TypeError`——這是本次排查中糾正的一個先前誤判（原本以為 `php -l` 通過代表 `void` 沒事）。全專案 20 個檔案、30 處 `: void` 回傳型別全數拿掉，改為不宣告回傳型別。修復後於 `php:7.0`／`7.4`／`8.2` 三個版本重新 lint 全數 0 錯誤。
+3. **`WORKSPACE_FORBIDDEN`（SI 的 `aeo`/`geo` summary／history 500）**：一開始懷疑是 `components/workspace/WorkspaceProvider.tsx` 的 fallback race condition（`legacyWorkspace(memberId)` 把會員數字 ID 當 workspace id 用），加了 `workspaceLoading` 閘門後仍未解決。追到底發現 `app/api/si/*/route.ts`（summary／history／generate／sites 共 7 支）呼叫的 `resolveWorkspaceContext()`（走 `/api/v1/context` 的 v1 workspace 成員資格檢查）對這些 legacy SI 端點根本是不相干、多餘的一道關卡——`backend/api/legacy_auth.php` 的 `hs_resolve_member_workspace_id()` 本來就會用已驗證的 member id 自己重新解析 workspace scope，不信任 client 端的 `X-Workspace-Id`。7 支路由已移除 `resolveWorkspaceContext()` 依賴，直接使用已驗證的 `user.id`。
+4. **ADS（`/ads`，獨立 `adfusion` Cloudflare Worker）點擊後跳回 `/dashboard`**：用 Cloudflare API（`GET /zones/{id}/workers/routes` 與 `GET /accounts/{id}/workers/domains`）直接查證，確認 `highlightsignal.com/ads`／`highlightsignal.com/ads/*` 路由本身正確指向 `adfusion` Worker，不是路由衝突。解碼使用者的 session JWT 後發現完全沒有 `backendToken` 欄位——追到 `lib/legacyMemberAuth.ts` 的 `enabledProductsFromSubscription()` 用 `Set.has()` 對訂閱方案 id 做完全比對，而真實訂閱 id 帶計費週期後綴（如 `starter_month`），永遠對不上純字串 `"starter"`，導致帳號被誤判為只有 dashboard 權限，登入時因此跳過向 Java 後端換 `backendToken` 那一步（`app/api/auth/login/route.ts` 的 `enabledProducts.includes("ads")` 判斷式），`adfusion` Worker 收到請求後驗證不到身份才導回 `/dashboard`。這與 `lib/subscription.ts` 的 `hasActiveHighlightSignalPlan()` 先前已修過的同一類 bug（同一份註解有記錄）是**同一個問題的第二份重複實作**，當時沒有一起修到。已改用一致的 `startsWith()` 比對。
+
+**驗證方式與結果**：
+* 第 1、2 項：本機 Docker（`php:7.0-cli`／`7.4-cli`／`8.2-cli`）對 `backend/api` 全量 `php -l` 驗證 0 錯誤；正式站部署後，`dashboard/workflow` 端點的錯誤訊息從 `ParseError` 演變為正常的 `UNAUTHORIZED`／`WORKSPACE_FORBIDDEN`（走到認證與成員資格檢查邏輯本身），間接證實編譯期問題已解除，但該端點本身尚未拿到明確的 `ok:true` 成功回應。
+* 第 3 項：owner 於無痕視窗實測 SI（AEO/GEO）summary／history／generate／sites，回報「進去了 目前OK」。
+* 第 4 項：owner 登出重新登入取得新 session 後實測 ADS，回報「進去了 目前OK」。
+
+**尚未完成**：
+* 本節 4 項修復連同上一節的真實部署變更，**全部尚未 commit**。
+* `dashboard/workflow` 端點與「SEO 分數」頁面本身仍未被 owner 明確確認成功（見上方「尚未完成」清單第一項）。
+* `backend/api/src/Workspace/WorkspaceAccessPolicy.php` 與 `lib/workspaceServer.ts` 各有一處本次排查用的 TEMP-DIAG 訊息（把 `workspace_id`/`member_id` 或 PHP 後端原始錯誤訊息回傳給前端），待確認問題不再發生後應改回原本籠統的錯誤訊息，避免正式環境長期外洩內部識別碼與錯誤細節。
+
+---
+
+**下方每個任務條目裡若寫著「真實主機套用待 owner 執行」，狀態已被上方「2026-07-23 真實正式環境部署」章節取代——真實套用已完成，只是尚未逐一走過每個任務自己的 golden path 驗證，因此列表本身暫不逐條改字，直接以上方章節為準。**
 
 已備妥的獨立執行任務包：
 
@@ -74,22 +130,22 @@ DEFERRED    已決定延後，不計入目前版本
 * `V10-06`：`docs/task-packets/V10-06_DECISION_FIRST_DASHBOARD.md`（VERIFY，2026-07-21，Decision-first Dashboard UI＋`WorkflowService` 小幅擴充（signal_id 直查／refresh_recommendation）程式完成，disposable rehearsal＋typecheck/lint/build 通過，真實瀏覽器登入互動驗證待 owner 於有憑證環境執行）
 * `V10-07`：`docs/task-packets/V10-07_DOMAIN_ADAPTER_ALIGNMENT.md`（VERIFY，2026-07-21，GA/SEO 兩條 vertical slice 程式完成，disposable rehearsal 通過；AEO/GEO 為明確 deferred gap（缺 scan-history 等價持久化層），真實主機驗證待 owner 執行）
 * `V10-08`：`docs/task-packets/V10-08_CORE_E2E_ACCEPTANCE.md`（VERIFY，2026-07-21，全鏈路 disposable rehearsal 通過（33/33），發現並修復一個真實跨來源缺陷（`RuleBasedAnalysisGenerator` 的 impact_area 曾寫死為 seo）；真實主機／真實資料執行仍待 owner，V1.0 milestone 因此不轉 DONE，見 `docs/releases/V10-08_CORE_E2E_ACCEPTANCE_REPORT.md`）
-* `V11-01`：`docs/task-packets/V11-01_ACTION_MANUAL_TASK_LIFECYCLE.md`（PLANNED）
-* `V11-02`：`docs/task-packets/V11-02_MYSQL_QUEUE_WORKER_RELIABILITY.md`（PLANNED）
-* `V11-03`：`docs/task-packets/V11-03_EXECUTION_RESULT.md`（PLANNED）
-* `V11-04`：`docs/task-packets/V11-04_BUSINESS_OUTCOME.md`（PLANNED）
-* `V11-05`：`docs/task-packets/V11-05_EVALUATION_FEEDBACK.md`（PLANNED）
-* `V11-06`：`docs/task-packets/V11-06_NOTIFICATION.md`（PLANNED）
-* `V11-07`：`docs/task-packets/V11-07_AUDIT_LOG_COVERAGE.md`（PLANNED）
-* `V11-08`：`docs/task-packets/V11-08_RETENTION_CLEANUP_BACKUP_JOBS.md`（PLANNED）
-* `V12-01`：`docs/task-packets/V12-01_REGISTRATION_ONBOARDING_BFF.md`（PLANNED）
-* `V12-02`：`docs/task-packets/V12-02_AUTOMATED_TEST_SUITE.md`（PLANNED）
-* `V12-03`：`docs/task-packets/V12-03_RELEASE_CI_CD.md`（PLANNED）
-* `V12-04`：`docs/task-packets/V12-04_OBSERVABILITY_INCIDENT_READINESS.md`（PLANNED）
-* `V12-05`：`docs/task-packets/V12-05_PERFORMANCE_SECURITY_PRIVACY_AUDIT.md`（PLANNED）
-* `V12-06`：`docs/task-packets/V12-06_DOCUMENTATION_IMPLEMENTATION_ALIGNMENT.md`（PLANNED）
-* `V12-07`：`docs/task-packets/V12-07_PILOT_VALIDATION.md`（PLANNED）
-* `V12-08`：`docs/task-packets/V12-08_FINAL_ACCEPTANCE_RELEASE.md`（PLANNED）
+* `V11-01`：`docs/task-packets/V11-01_ACTION_MANUAL_TASK_LIFECYCLE.md`（VERIFY，2026-07-21，`actions` 表＋Task lifecycle state machine 程式＋SQL 完成，disposable rehearsal 通過（29/29，含修復一個 idempotency 缺陷），真實主機套用待 owner 執行）
+* `V11-02`：`docs/task-packets/V11-02_MYSQL_QUEUE_WORKER_RELIABILITY.md`（VERIFY，2026-07-21，queue_jobs reliability 程式＋SQL 完成，disposable rehearsal 通過（含真實雙進程 concurrency 測試），真實主機套用＋scheduler 設定待 owner 執行）
+* `V11-03`：`docs/task-packets/V11-03_EXECUTION_RESULT.md`（VERIFY，2026-07-21，`execution_results` 程式＋SQL 完成，disposable rehearsal 通過（含 Task 與 Queue Job 兩條真實整合路徑），真實主機套用待 owner 執行）
+* `V11-04`：`docs/task-packets/V11-04_BUSINESS_OUTCOME.md`（VERIFY，2026-07-21，`business_outcome_metrics` 程式＋SQL 完成（additive，legacy 表未動），disposable rehearsal 通過（含真實端到端整合），真實主機套用待 owner 執行）
+* `V11-05`：`docs/task-packets/V11-05_EVALUATION_FEEDBACK.md`（VERIFY，2026-07-21，`evaluations` 程式＋SQL 完成，disposable rehearsal 通過（含真實 WorkflowService 整合），真實主機套用待 owner 執行）
+* `V11-06`：`docs/task-packets/V11-06_NOTIFICATION.md`（VERIFY，2026-07-21，Notification 程式＋SQL 完成（含真實 Queue 整合、兩個真實 domain event），disposable rehearsal 通過，真實主機套用與 email provider 選型待 owner 執行）
+* `V11-07`：`docs/task-packets/V11-07_AUDIT_LOG_COVERAGE.md`（VERIFY，2026-07-22，Audit Log 程式＋SQL 完成，disposable rehearsal 通過，真實主機套用待 owner 執行）
+* `V11-08`：`docs/task-packets/V11-08_RETENTION_CLEANUP_BACKUP_JOBS.md`（VERIFY，2026-07-22，Retention/Cleanup/Backup 程式＋SQL 完成，disposable rehearsal 通過（35 項功能斷言＋真實 mysqldump backup/restore 驗證），真實主機套用與排程設定待 owner 執行）
+* `V12-01`：`docs/task-packets/V12-01_REGISTRATION_ONBOARDING_BFF.md`（VERIFY，2026-07-22，highlightsignal 側 BFF 完成，本地 mock server＋真實瀏覽器驗證通過；範圍排除共用 4.php 系統，email 驗證/重設與 Cloudflare Rate Limiting 另案處理）
+* `V12-02`：`docs/task-packets/V12-02_AUTOMATED_TEST_SUITE.md`（VERIFY，2026-07-22，PHPUnit＋Vitest 建立完成，disposable 驗證通過，CI 雙 job 已接上；過程中發現並修復 3 個真實潛伏 bug）
+* `V12-03`：`docs/task-packets/V12-03_RELEASE_CI_CD.md`（VERIFY，2026-07-22，pipeline/runbook/manifest 工具建立完成；真實 repo settings 與部署超出環境能力/owner 政策範圍）
+* `V12-04`：`docs/task-packets/V12-04_OBSERVABILITY_INCIDENT_READINESS.md`（VERIFY，2026-07-22，SLI 盤點＋新 `GET /api/v1/ops/dashboard` 端點＋incident runbook 建立完成，disposable rehearsal 通過（3 項測試/11 個斷言）；真實告警通道為誠實記錄的缺口）
+* `V12-05`：`docs/task-packets/V12-05_PERFORMANCE_SECURITY_PRIVACY_AUDIT.md`（VERIFY，2026-07-22，修復並重驗 2 個 P1（安全標頭缺失、`dashboard_ai_logs` 無 retention）；dependency/secret scan、CORS/auth 負向路徑、本地效能量測完成；真實 staging CWV／Cloudflare Rate Limiting 待 owner）
+* `V12-06`：`docs/task-packets/V12-06_DOCUMENTATION_IMPLEMENTATION_ALIGNMENT.md`（VERIFY，2026-07-22，`docs/5.database`＋`docs/6.api`全數＋`docs/7.backend`抽樣 2 份共 15 個過時 Draft 文件加上真實對照 callout；其餘文件未逐份深入核對，已誠實記錄）
+* `V12-07`：`docs/task-packets/V12-07_PILOT_VALIDATION.md`（BLOCKED_NEEDS_REAL_PILOT，2026-07-22，完整 protocol/criteria/consent/tracking template/report 格式已備妥，見 `docs/releases/V12-07_PILOT_VALIDATION_PROTOCOL.md`；無法用 mock 宣布完成，待 owner 提供真實部署與真實 pilot 對象）
+* `V12-08`：`docs/task-packets/V12-08_FINAL_ACCEPTANCE_RELEASE.md`（BLOCKED_NEEDS_OWNER_GOLIVE，2026-07-22，consolidated final checklist＋`V1.2_RELEASE_NOTES.md` 草稿已備妥，見 `docs/releases/V12-08_FINAL_ACCEPTANCE_CHECKLIST.md`；本任務包自身聲明不構成 deployment 授權，待 owner 明確核准 go-live）
 
 版本進度只在 Task 通過驗收後更新；未提交或未驗證的程式碼不自動計入完成度。
 
@@ -203,10 +259,11 @@ migration endpoint」要求，已由 owner 實際打網址確認。
    併發 runner）需要拋棄式資料庫且需要 CLI 執行 runner；本機無 PHP／MySQL
    runtime，且主機無 SSH／cron，owner 決定不申請。這三項確定不會有可重現證據，
    列為長期接受風險，不是暫時待辦，見 `backend/sql/VERIFICATION_RUNBOOK.md` 第 1 節。
-2. `V09-02` 移除 lazy-GET 建立 Workspace 後，目前沒有任何呼叫方會呼叫新的
-   `POST /api/v1/workspaces`；在 V12-01 Onboarding BFF 或臨時銜接方案完成前，
-   從未觸發過舊 lazy-GET 的全新會員不會自動取得 Workspace。此為刻意不擴大範圍
-   到 frontend／V09-06 的直接後果，需要 owner 決定銜接方式與時程。
+2. ~~`V09-02` 移除 lazy-GET 建立 Workspace 後，目前沒有任何呼叫方會呼叫新的
+   `POST /api/v1/workspaces`~~ — **已由 `V12-01` 解決**（2026-07-22）：新的
+   registration BFF（`app/api/auth/register/route.ts`）在 register→自動登入
+   成功後，主動呼叫 Workspace provisioning，不再需要等待舊的 lazy-GET 或
+   `WorkspaceProvider` reactive fallback（後者仍保留作安全網）。
 3. 尚未執行任何驗證指令；本節與各 Task 狀態為 VERIFY，不是 DONE。
 
 2026-07-20 於真實 pre-launch host（智邦，phpMyAdmin 手動套用）執行驗證，
@@ -971,36 +1028,92 @@ V0.8 Release Safety
 
 ## 工作清單
 
-- [ ] `V11-01` Action／Manual Task lifecycle
-  - 負責人、期限、status、steps、history、permission。
+- [x] `V11-01` Action／Manual Task lifecycle — **VERIFY（2026-07-21，程式＋SQL 完成，disposable rehearsal 通過，真實主機套用待 owner 執行）**
+  - 負責人、期限、status、steps、history、permission。→ `backend/sql/migrations/029_action_manual_task_lifecycle.sql`（新建 `actions` 表，`decision_id` UNIQUE 保證 idempotent）＋`030_action_manual_task_backfill.sql`（既有 task 反推 Decision 並補建 Action，nullable expand，非破壞性）；`tasks.status` 新增 `blocked`，`WorkflowService::TASK_STATUS_TRANSITIONS` 定義合法跳轉（`completed` 永遠不可直接設定）；`update_task` 新動作支援 assignee（含 workspace membership 驗證）/due_at/status/completion_note。
+  - 驗收：disposable rehearsal（29 項斷言）證明 backfilled 舊任務可正常運作、新建流程正確建立 Action、**排練中發現並修復一個真實 idempotency 缺陷**（重複提交 create_task 曾產生重複 Action，已修正為完全 no-op）、blocked 凍結（不會被步驟自動完成覆寫）、cancelled/completed 終態、assignee 驗證、跨 Workspace 拒絕、四種不接受 outcome 皆不建立 Action；詳見 `docs/task-packets/V11-01_ACTION_MANUAL_TASK_LIFECYCLE.md` 與 `backend/sql/VERIFICATION_RUNBOOK.md` 第 13 節。
 
-- [ ] `V11-02` MySQL Queue Worker reliability
+- [x] `V11-02` MySQL Queue Worker reliability — **VERIFY（2026-07-21，程式＋SQL 完成，disposable rehearsal 通過含真實雙進程 concurrency 測試，真實主機套用＋scheduler 設定待 owner 執行）**
+  - claim、lock、retry、backoff、timeout、idempotency、dead-letter、stuck recovery。→ `backend/api/src/Queue/QueueRepository.php`（MySQL 5.6 相容原子 claim，`UPDATE...ORDER BY...LIMIT 1`）＋`QueueService.php`（exponential backoff、dead-letter、stuck recovery、job_type/payload 驗證）；`migrations/031_queue_worker_reliability_expand.sql`（`queue_jobs` 既有表 nullable expand）。新增 `POST /api/v1/queue/run` 觸發端點，`WorkerRequestAuthenticator` 獨立密鑰簽章保護。
+  - 驗收：真實雙進程 concurrency 測試（20 個 job 由兩個真實 process 平行搶佔，DB 直接查證恰好各執行一次、零重複零遺漏）＋21 項單進程斷言（idempotent enqueue、retry/backoff、dead-letter、未知 job_type fail-closed、stuck recovery、跨 Workspace cancel）；尚無真實 job handler（第一個使用者是 `V11-06` Notification）；詳見 `docs/task-packets/V11-02_MYSQL_QUEUE_WORKER_RELIABILITY.md` 與 `backend/sql/VERIFICATION_RUNBOOK.md` 第 14 節。
   - claim、lock、retry、backoff、timeout、idempotency、dead-letter、stuck recovery。
 
-- [ ] `V11-03` Execution Result
-  - 記錄執行內容、狀態、輸出、錯誤與完成時間。
+- [x] `V11-03` Execution Result — **VERIFY（2026-07-21，程式＋SQL 完成，disposable rehearsal 通過，真實主機套用待 owner 執行）**
+  - 記錄執行內容、狀態、輸出、錯誤與完成時間。→ 新建 `execution_results`（`task_id`/`queue_job_id` 恰一設定，程式層強制）；`ExecutionResultService` 做遮蔽（Bearer/API key/password）＋4KB 截斷；接到 `WorkflowService`（Task 完成）與 `QueueService`（每次 job 嘗試，成功與失敗皆記錄）兩個真實呼叫點。
+  - 驗收：disposable rehearsal（13 項斷言）證明遮蔽/截斷/idempotency 正確，且兩條真實整合路徑（Task 完成、Queue Job 成功/失敗/重試）皆正確寫入獨立、不重複的 Result 列；詳見 `docs/task-packets/V11-03_EXECUTION_RESULT.md` 與 `backend/sql/VERIFICATION_RUNBOOK.md` 第 15 節。
 
-- [ ] `V11-04` Business Outcome
-  - baseline、measurement window、outcome metrics、status。
+- [x] `V11-04` Business Outcome — **VERIFY（2026-07-21，程式＋SQL 完成，disposable rehearsal 通過，真實主機套用待 owner 執行）**
+  - baseline、measurement window、outcome metrics、status。→ 新建 ADDITIVE 的 `business_outcome_metrics`（連回 Action，`UNIQUE(action_id, metric_key)`），既有 `business_outcomes` 表完全未變動（設計理由見 `VERIFICATION_RUNBOOK.md` 第 16 節）；baseline write-once、per-metric fail-closed unavailable、improved/flat/regressed 依 direction 計算。
+  - 驗收：disposable rehearsal（17 項斷言）證明單元行為正確，且透過 `WorkflowService` 真實 create_task→complete→measure_outcome 流程端到端驗證新舊兩種 outcome 表示同時正確更新；詳見 `docs/task-packets/V11-04_BUSINESS_OUTCOME.md` 與 `backend/sql/VERIFICATION_RUNBOOK.md` 第 16 節。
 
-- [ ] `V11-05` Evaluation／Feedback
-  - Recommendation 有效性、人工回饋、結果評估；不實作 Autonomous Learning。
+- [x] `V11-05` Evaluation／Feedback — **VERIFY（2026-07-21，程式＋SQL 完成，disposable rehearsal 通過，真實主機套用待 owner 執行）**
+  - Recommendation 有效性、人工回饋、結果評估；不實作 Autonomous Learning。→ 新建 `evaluations`（system/human 共表，`source` 區分）；6 種基本 metric（adoption/decision outcome/task completion/outcome achievement/time-to-decision/time-to-outcome）於 `WorkflowService::get()` 讀取時 lazy 計算，append-only + idempotent-if-unchanged；`EvaluationService` 對寫入路徑零依賴，結構上無法觸發自動 Decision/Action。
+  - 驗收：disposable rehearsal（28 項斷言）證明計算正確、human feedback 權限/idempotency 正確、跨 Workspace 隔離，且透過 `WorkflowService::get()` 真實整合驗證 lazy 計算行為；詳見 `docs/task-packets/V11-05_EVALUATION_FEEDBACK.md` 與 `backend/sql/VERIFICATION_RUNBOOK.md` 第 17 節。
 
-- [ ] `V11-06` Notification
-  - Domain Event 驅動、偏好、delivery attempt、retry、去重。
+- [x] `V11-06` Notification — **VERIFY（2026-07-21，程式＋SQL 完成，disposable rehearsal 通過，真實主機套用＋email provider 選型待 owner 執行）**
+  - Domain Event 驅動、偏好、delivery attempt、retry、去重。→ 新建 3 張表（`notifications`／`notification_preferences`／`notification_deliveries`）；接上兩個真實事件（si/seo/summary.php 與 ga/data_sync.php 的 signal.detected、WorkflowService 的 task.completed）；email 經 `V11-02` Queue 非同步送達，`EmailDeliveryHandler` 為明確記錄的 provider stub（尚未選定真實 provider）。
+  - 驗收：disposable rehearsal（22 項斷言）證明 dedup、in-app 立即送達、email 兩層 gate（preference＋provider 設定）正確運作、真實 queue batch 執行 retry/dead-letter、per-event_type 偏好、read/dismiss、跨 Workspace 隔離，且透過 `WorkflowService` 真實整合驗證 task.completed 事件；詳見 `docs/task-packets/V11-06_NOTIFICATION.md` 與 `backend/sql/VERIFICATION_RUNBOOK.md` 第 18 節。
 
-- [ ] `V11-07` Audit Log 完整覆蓋
-  - Security-sensitive mutation、AI mutation、Decision、Task、Integration。
-  - 一般使用者不可修改 Audit Log。
+- [x] `V11-07` Audit Log 完整覆蓋 — **VERIFY（2026-07-22，程式＋SQL 完成，disposable rehearsal 通過（41/41），真實主機套用待 owner 執行）**
+  - Security-sensitive mutation、AI mutation、Decision、Task、Integration。→
+    收斂 4 個各自 hand-rolled 的 `audit()` 為單一 `AuditLogger`（統一
+    redaction／4KB size limit／`_schema_version`）；補齊 Decision/Action/
+    Task/Outcome 細粒度事件（取代單一通用 `"Dashboard Workflow {action}"`
+    事件）、Execution Result、Queue 第二條 stale-lease dead-letter 路徑、
+    GA OAuth 連接、人工 Feedback、Notification read/dismiss/preference、
+    Workspace provisioning；`SignalService::applyDetectionPlan()` 補上
+    交易包裝（此前 signal 與 audit 是分離的 autocommit）。AI 使用已由既有
+    `dashboard_ai_logs`/`dashboard_ai_plan_logs` 覆蓋，不重複塞入
+    `audit_logs`。
+  - 一般使用者不可修改 Audit Log。→ 新 `GET .../audit-logs` 搜尋 API
+    僅 owner/admin 可讀（新 `audit.read` permission），全專案無任何
+    `UPDATE`/`DELETE audit_logs` 呼叫點（grep 驗證），無任何路由可寫入。
+  - 驗收：disposable rehearsal（41 項斷言）證明 redaction（password/
+    api_key/Bearer token 皆不洩漏於 metadata_json）、size limit truncation、
+    FK violation 下 signal+audit 正確 rollback、`create_task` 完整 6 事件
+    串且 idempotent resubmit 零噪音、Queue 兩條 dead-letter 路徑皆被
+    audit、跨 Workspace 隔離、owner/admin-only 權限矩陣；詳見
+    `docs/task-packets/V11-07_AUDIT_LOG_COVERAGE.md` 與
+    `backend/sql/VERIFICATION_RUNBOOK.md` 第 19 節。
 
-- [ ] `V11-08` Retention、cleanup 與 backup jobs
-  - 依資料類別執行保留、刪除、備份及還原。
+- [x] `V11-08` Retention、cleanup 與 backup jobs — **VERIFY（2026-07-22，程式＋SQL 完成，disposable rehearsal 通過（35 項功能斷言＋真實 backup/restore 驗證），真實主機套用與排程設定待 owner 執行）**
+  - 依資料類別執行保留、刪除、備份及還原。→ 完整 data-class inventory（9
+    類，各有 retention 期間／理由／刪除方式／owner 核准需求，見
+    VERIFICATION_RUNBOOK 第 20 節）；新
+    `backend/api/src/Retention/RetentionCleanupService.php` 實作 4 種真實
+    cleanup job（nonces／終態 Queue Jobs／舊 Execution Result／已讀
+    Notification），dry-run-first、批次上限、idempotent 重跑、單一類別
+    失敗不阻擋其他類別；發現並正確處理 `execution_results`／
+    `notification_deliveries` 對 `queue_jobs` 的 `ON DELETE RESTRICT`
+    真實跨表相依；dead_letter Queue Job 清理需要
+    `RETENTION_DEAD_LETTER_CLEANUP_APPROVED=true` 明確 owner 核准；新
+    `POST /api/v1/retention/run`（沿用 `WorkerRequestAuthenticator`）供
+    外部排程器呼叫；Audit Log 與核心 business records 明確排除於自動
+    刪除之外。Backup/restore 為 owner 手動 phpMyAdmin 匯出程序（主機無
+    SSH/cron），本任務完成一次真實 disposable restore 驗證。
+  - 驗收：disposable rehearsal（35 項功能斷言）證明 dry-run 與實際刪除
+    結果一致、FK-blocked 排除正確運作、dead_letter 核准 gate、unread
+    notification 永不刪除、真實強制單一類別失敗不影響其他類別、跨
+    Workspace audit 歸屬正確；**真實 backup/restore 驗證**（非模擬）：
+    mysqldump 362ms、全新 disposable 容器還原 693ms、13 張表 row count
+    與 5 張表 checksum 完全一致、還原後 FK 約束真實生效；詳見
+    `docs/task-packets/V11-08_RETENTION_CLEANUP_BACKUP_JOBS.md` 與
+    `backend/sql/VERIFICATION_RUNBOOK.md` 第 20 節。
 
 ## V1.1 出口條件
 
-- [ ] Decision → Action → Result → Outcome → Feedback 可完整運作。
-- [ ] Queue failure 可復原且不重複執行。
-- [ ] Notification 與 Audit 可供營運追蹤。
+- [x] Decision → Action → Result → Outcome → Feedback 可完整運作 —
+      disposable rehearsal 層級驗證完整鏈路（`V11-01`～`V11-05`），真實
+      主機套用待 owner。
+- [x] Queue failure 可復原且不重複執行 — `V11-02` 真實雙進程 concurrency
+      測試＋`V11-08` 的 stale-lease 第二條 dead-letter 路徑皆已驗證，真實
+      主機套用待 owner。
+- [x] Notification 與 Audit 可供營運追蹤 — `V11-06`／`V11-07`
+      disposable rehearsal 驗證通過，真實主機套用待 owner。
+
+**V1.1 Execution & Operations 全部 8 項任務（`V11-01`～`V11-08`）程式＋
+SQL＋disposable rehearsal 皆已完成，狀態 VERIFY，真實主機套用（migration
+010-037 依序套用＋PHP／前端上傳＋排程設定）待 owner 一次執行——同
+V1.0 milestone 維持 VERIFY 而非 DONE 的唯一原因。**
 
 ---
 
@@ -1010,38 +1123,185 @@ V0.8 Release Safety
 
 ## 工作清單
 
-- [ ] `V12-01` Registration／Onboarding BFF 重整
-  - Browser 不直接呼叫 legacy register endpoint。
-  - User、Workspace、Membership 建立具交易或補償機制。
-  - Email verification、forgot password、錯誤恢復。
+- [x] `V12-01` Registration／Onboarding BFF 重整 — **VERIFY（2026-07-22，highlightsignal 側完成，本地 mock server＋真實瀏覽器驗證通過，範圍已與 owner 確認）**
+  - Browser 不直接呼叫 legacy register endpoint。→ 研究發現 register.php／
+    login.php 完全不在本 repo，而是 `D:\7.Highlight\1.Project\4.php\api`
+    下跨 ~12 個產品共用的會員系統（含明文 DB 密碼），與 owner 確認後範圍
+    限定僅整理 highlightsignal 這一側，不修改共用程式碼。新
+    `app/api/auth/register/route.ts` 同源 BFF（origin/CSRF 檢查、
+    correlation ID、伺服器端驗證）取代原本瀏覽器直連；`login` route 同步
+    補上相同防護，並將帳號列舉風險的 "帳號不存在"／"密碼錯誤" 收斂為
+    單一訊息。
+  - User、Workspace、Membership 建立具交易或補償機制。→ register → 自動
+    登入 → Workspace provisioning 三步驟 saga，各階段結果分別回報供 UI
+    顯示正確的部分失敗狀態；Workspace provisioning 沿用既有
+    `WorkspaceProvisioningService`（V09-02 已驗證交易＋idempotent），
+    `WorkspaceProvider` 既有 reactive fallback 保留作安全網。
+  - Email verification、forgot password、錯誤恢復。→ 外部系統完全沒有這
+    兩個端點，且範圍決定不修改共用系統，誠實標記為 blocked、另開任務
+    （4.php 加端點；4.php 明文密碼/SQL 洩漏/帳號列舉問題）。Rate limiting
+    採 Cloudflare Rate Limiting Rules（前端跑在 edge runtime 無持久記憶體，
+    且部署本身依 owner 政策待 V1.2 全部完成才能進行，此為記錄之後設定的
+    建議規則，非本次程式碼實作）。
+  - 驗收：`npx tsc --noEmit`／`npm run lint` 乾淨；本地 mock server（真實
+    還原外部系統回應格式）＋真實 `next dev`＋真實瀏覽器點擊操作完整跑過
+    註冊→自動登入→Workspace 建立→導向 Dashboard；network trace 證實
+    Browser 僅呼叫同源 BFF；10 項 curl 情境（origin 拒絕、happy path、
+    重複 email、帳號列舉訊息一致性、正確登入、輸入驗證、demo 登入）全數
+    通過；詳見 `docs/task-packets/V12-01_REGISTRATION_ONBOARDING_BFF.md`
+    與 `docs/releases/V12-01_REGISTRATION_ONBOARDING_BFF_REPORT.md`。
 
-- [ ] `V12-02` Automated Test Suite
-  - Unit、API integration、migration、authorization、queue、critical E2E。
-  - 最低必要情境包含 JWT、signature、cross-workspace、Decision、rollback。
+- [x] `V12-02` Automated Test Suite — **VERIFY（2026-07-22，PHPUnit＋Vitest 建立完成，disposable 驗證通過，CI 雙 job 已接上）**
+  - Unit、API integration、migration、authorization、queue、critical E2E。→
+    新 `backend/api/tests/`（PHPUnit 9.6，38 項斷言）＋新 repo 根目錄
+    `tests/`（Vitest 4，26 項）；`bin/apply_test_schema.php` 把每次任務
+    手工組 schema chain 的步驟收斂成可重跑指令；`bin/lint.php` 補上
+    composer.json 裡從未真正存在過的 dead script。
+  - 最低必要情境包含 JWT、signature、cross-workspace、Decision、rollback。→
+    JWT（前端 sign/verify round-trip＋竄改/過期拒絕）、signature/nonce
+    （PHP 端真實 replay 測試，前端獨立以 Node crypto 重新推導同一 HMAC
+    演算法交叉驗證雙方一致）、cross-workspace（真實兩個 Workspace 隔離）、
+    Decision idempotency（含真實 DB UNIQUE 約束 defense-in-depth）、queue
+    concurrency（真實雙進程，含 start-signal barrier 讓 race 具決定性）、
+    migration checksum（此專案的「rollback」策略是 backup/restore，已在
+    V11-08 驗證；本任務驗證的是 checksum-mismatch fail-closed 保護）。
+  - 過程中撰寫真實測試（非僅推理）意外發現並修復 3 個真實潛伏 bug：
+    `ServiceRequestAuthenticator`／`WorkerRequestAuthenticator` 的 nonce
+    重放偵測是永遠不會執行到的 dead code；`MigrationRunner` 把版本號當
+    array key 時 PHP 自動轉型成整數，導致嚴格型別檢查在版本號達 100+
+    時會真的壞掉（目前 010-037 皆有前導零而未受影響）。4 項故意破壞的
+    缺陷（authorization、migration checksum、queue duplicate/lost-claim、
+    Decision replay）全數證明測試會失敗；詳見
+    `docs/task-packets/V12-02_AUTOMATED_TEST_SUITE.md` 與
+    `docs/releases/V12-02_AUTOMATED_TEST_SUITE_REPORT.md`。
 
-- [ ] `V12-03` Release CI/CD
-  - Frontend、PHP、migration 有明確發布順序與阻擋條件。
-  - staging approval、production deploy、version tag、rollback。
+- [x] `V12-03` Release CI/CD — **VERIFY（2026-07-22，pipeline/runbook/manifest 工具建立完成）**
+  - Frontend、PHP、migration 有明確發布順序與阻擋條件。→ 新
+    `docs/8.infrastructure/11_Release_Promotion_Runbook.md`：DB
+    （expand-only）→ Backend/PHP → Queue Worker → Frontend → 資料回填/驗證
+    → deferred contract，每步明確 stop condition；PHP/SQL 手動 promotion
+    程序圍繞既有 `manual_apply_bookkeeping.sql` 編排，不重複。
+  - staging approval、production deploy、version tag、rollback。→ 新
+    `.github/workflows/release-promote.yml`（`workflow_dispatch` only，
+    `promote` job 依賴 `reverify` gate）；新
+    `scripts/generate-release-manifest.mjs`（已本地真實驗證，正確解析
+    25 筆 migration checksum）；rollback/fix-forward matrix 依層級記錄
+    （DB 僅能 fix-forward＋V11-08 備份還原、Backend FTP 重新上傳、
+    Frontend Cloudflare Worker 版本回滾）。**誠實記錄**：此環境無
+    `gh`/API 存取，無法代為設定真實 GitHub Environment reviewer；真實
+    Cloudflare 部署依 owner 既有政策（V1.2 全部完成前不部署）刻意
+    保留 dry-run only，`wrangler deploy` 那行刻意註解掉；詳見
+    `docs/task-packets/V12-03_RELEASE_CI_CD.md` 與
+    `docs/releases/V12-03_RELEASE_CI_CD_REPORT.md`。
 
-- [ ] `V12-04` Observability 與 incident readiness
-  - Worker／PHP error、API latency、queue backlog、AI cost/quota、email failure、uptime alert。
-  - Runbook、owner、告警門檻與事故紀錄方式。
+- [x] `V12-04` Observability 與 incident readiness — **VERIFY（2026-07-22，SLI 盤點＋新 ops/dashboard 端點＋incident runbook 建立完成）**
+  - Worker／PHP error、API latency、queue backlog、AI cost/quota、email failure、uptime alert。→ 新
+    `backend/api/src/Ops/OpsDashboardService.php`＋`GET /api/v1/ops/dashboard`
+    （簽章同 `/api/v1/queue/run`），真實查詢既有 `queue_jobs`／
+    `notification_deliveries`／`dashboard_ai_logs`／`schema_migrations`
+    四類訊號；availability 沿用既有 `/api/v1/health`；API latency/error
+    誠實記錄為缺口（無 request-level log 表）。
+  - Runbook、owner、告警門檻與事故紀錄方式。→ 新
+    `docs/8.infrastructure/12_Observability_Runbook.md`：SLI inventory、
+    門檻/嚴重度/owner 表、incident runbook（triage/contain/rollback/
+    communication/evidence/postmortem）＋postmortem 模板；3 種 game day
+    情境（queue backlog、provider/handler failure、API/DB failure）皆由
+    `OpsDashboardServiceTest`（3 測試/11 斷言）真實證明，非僅口頭敘述。
+    **誠實記錄**：真實告警送達（Slack/email/PagerDuty）不存在——單一
+    owner 專案且無告警平台，門檻/資料已就緒但通道選型待 owner 決定；
+    correlation ID 在 PHP（`audit_logs.request_id`）與 Next.js
+    （`correlationId`）兩側尚未共用同一值。詳見
+    `docs/task-packets/V12-04_OBSERVABILITY_INCIDENT_READINESS.md` 與
+    `docs/releases/V12-04_OBSERVABILITY_INCIDENT_READINESS_REPORT.md`。
 
-- [ ] `V12-05` Performance／Security／Privacy release audit
-  - Core Web Vitals、API timeout、rate limit、dependency／secret scan。
-  - Privacy、data deletion、retention、backup restore 驗證。
+- [x] `V12-05` Performance／Security／Privacy release audit — **VERIFY（2026-07-22，修復並重驗 2 個 P1）**
+  - Core Web Vitals、API timeout、rate limit、dependency／secret scan。→
+    無真實 staging 可測真實 CWV（誠實記錄，待 owner 真實部署後量測）；
+    改以真實 `next build` bundle gzip 大小與真實 disposable Docker
+    （MySQL 5.6＋PHP 7.4）API 延遲量測作為證據。**修復並重驗**：
+    `next.config.ts` 新增完整安全標頭（CSP/HSTS/X-Frame-Options 等，
+    先前完全缺少）；`npm audit` 17 項發現→`npm audit fix`（無 breaking
+    change）修復 10 項，剩餘 7 項皆為 wrangler/miniflare/opennext 建置期
+    工具鏈相依（非執行期程式碼），列入風險登記表；PHP 端零第三方
+    runtime 套件（僅 dev-only PHPUnit），無 PHP dependency-CVE 攻擊面；
+    secret scan 全庫掃描僅命中明確標記的測試用假值；CORS/auth 負向路徑
+    （缺簽章、逾時、跨 workspace）以真實請求驗證回應安全、不洩漏內部
+    資訊。Rate limit 沿用 V12-01 owner 決定（Cloudflare Rate Limiting
+    Rules，platform 層級，設定待 owner）。
+  - Privacy、data deletion、retention、backup restore 驗證。→ **修復並
+    重驗**：`dashboard_ai_logs`（AI 問答/context/response 原始文字）
+    先前完全沒有 retention 政策——新
+    `RetentionCleanupService::cleanupDashboardAiLogs()`（90 天窗口），2
+    項新 PHPUnit 測試／9 個斷言，含 NULL workspace_id 邊界案例。註冊表單
+    新增服務條款/隱私政策連結（先前完全沒有）。Data inventory 確認
+    highlightsignal 自身資料庫幾乎不存原始 PII（recipient 為
+    member_id，非 email，實際 email 僅存在共用 4.php 系統）。Backup
+    restore 與資料刪除的真實交互（還原備份可能重新引入已刪除資料）已
+    誠實記錄為程序性事項。修復後完整 43/43 PHPUnit＋26/26 Vitest 重跑
+    皆綠燈，無 regression。詳見
+    `docs/task-packets/V12-05_PERFORMANCE_SECURITY_PRIVACY_AUDIT.md` 與
+    `docs/releases/V12-05_RELEASE_AUDIT_REPORT.md`。
 
-- [ ] `V12-06` 文件與實作對齊
-  - API、Database、Backend、Infrastructure、Frontend、ADR 與實際程式一致。
-  - 移除重複、過時或互相衝突的文件。
+- [x] `V12-06` 文件與實作對齊 — **VERIFY（2026-07-22，15 個過時 Draft 文件加上真實對照 callout）**
+  - API、Database、Backend、Infrastructure、Frontend、ADR 與實際程式一致。→
+    Alignment v1.2 §16 本身已列出「Database→API→Backend...」修正清單，
+    本任務即依此順序核對：`docs/5.database`（8 份）與 `docs/6.api`
+    （5 份）全數核對真實 migrations/routes，`docs/7.backend` 抽樣 2 份
+    （Signal/Recommendation，V09-V12 churn 最大）——確認全數為實作前
+    Draft、從未隨真實 schema/route/module 更新（如
+    `06_Recommendation_Backend.md` 描述的 `Modules/Recommendation/`
+    目錄根本不存在，真實邏輯在 `Dashboard/WorkflowService`＋
+    `Action/ActionRepository`）。`docs/4.architecture`／`docs/10.adr`
+    抽樣確認維持抽象、與實作無衝突。
+  - 移除重複、過時或互相衝突的文件。→ 依任務本身「不得誤刪仍有使用者
+    價值的歷史證據」與「過時文件需提供 replacement link 或清楚
+    archived/deprecated 標示」的要求，15 份文件皆改為加上真實對照
+    callout＋`Status: Draft (superseded by real implementation)`，原文
+    保留為歷史設計紀錄，不刪除。全庫 166 個 `docs/**/*.md` 的相對連結
+    掃描：0 個失效連結（修改前後皆是）；另修正 2 處先前任務（V12-02、
+    本任務自己的 V12-05）報告中的路徑前綴筆誤。**誠實記錄**：
+    `docs/7.backend` 其餘 8 份、`docs/9.frontend` 9 份、
+    `docs/8.infrastructure` 未逐份深入核對（見報告第 4 節），非本次
+    已全部覆蓋。詳見
+    `docs/task-packets/V12-06_DOCUMENTATION_IMPLEMENTATION_ALIGNMENT.md`
+    與
+    `docs/releases/V12-06_DOCUMENTATION_IMPLEMENTATION_ALIGNMENT_REPORT.md`。
 
-- [ ] `V12-07` Pilot validation
-  - 3–5 個真實 Workspace 完成 onboarding 到 Business Outcome。
-  - 收集失敗點、完成率、使用者回饋與營運問題。
+- [ ] `V12-07` Pilot validation — **BLOCKED_NEEDS_REAL_PILOT（2026-07-22，protocol 已備妥，無法用 mock 完成）**
+  - 3–5 個真實 Workspace 完成 onboarding 到 Business Outcome。→ 目前無
+    真實部署（Cloudflare/PHP host 未套用 V09-V12 migration）也無真實
+    pilot 對象，任務包本身明文禁止「沒有真實 participants 時用 mock
+    宣布完成」——因此無法產出真實 journey 記錄。已備妥完整、可立即
+    執行的 protocol：participant criteria（3-5 個真實網站/GA
+    property）、成功指標與退出條件（14 天/Workspace 時間盒）、
+    journey-stage tracking template、defect severity triage（沿用
+    V12-05 P0/P1 定義）。
+  - 收集失敗點、完成率、使用者回饋與營運問題。→ consent／隱私邊界
+    （沿用既有 `/privacy`／`/data-deletion`，不另建 pilot 專屬資料收集）
+    與 support 流程（沿用既有單一 owner email）已定義；exit feedback
+    問題組（4 題）與最終 report 格式已備妥。詳見
+    `docs/task-packets/V12-07_PILOT_VALIDATION.md` 與
+    `docs/releases/V12-07_PILOT_VALIDATION_PROTOCOL.md`。**待 owner**：
+    提供真實部署與 3-5 個已同意的真實 pilot 對象後，依此 protocol 執行
+    即可產出真實 `V12-07_PILOT_VALIDATION_REPORT.md`。
 
-- [ ] `V12-08` Final acceptance 與正式發布
-  - Security、migration、domain、operations、backup、rollback checklist 全部簽核。
-  - 建立 V1.2 release note、tag、部署證據與已知限制。
+- [ ] `V12-08` Final acceptance 與正式發布 — **BLOCKED_NEEDS_OWNER_GOLIVE（2026-07-22，checklist/release notes 草稿已備妥，無法自行完成）**
+  - Security、migration、domain、operations、backup、rollback checklist 全部簽核。→
+    新 `docs/releases/V12-08_FINAL_ACCEPTANCE_CHECKLIST.md`：逐項對照
+    V08-V12 每個 task 的真實 code-complete 證據 vs. 真實主機狀態（後者
+    全數尚未為真，已列成獨立一節避免誤讀）。Security/migration/domain/
+    queue/notification/audit/retention/rollback/observability/文件對齊
+    等 code-complete 部分皆已簽核；Pilot（`V12-07`）與真實 staging/
+    production 部署因無真實環境與真實核准，無法簽核。
+  - 建立 V1.2 release note、tag、部署證據與已知限制。→ 新
+    `docs/releases/V1.2_RELEASE_NOTES.md`（DRAFT）：完整羅列 V1.0/V1.1/
+    V1.2 新增功能、已知限制與已接受風險（告警通道缺口、Cloudflare Rate
+    Limiting 未設定、4.php email 驗證缺口與安全問題、殘留 npm audit
+    低風險項目、AEO/GEO scan-history 缺口、Pilot 未執行等）、migration
+    清單與 cutover 時的基礎設施變更提醒；tag/真實部署證據留待真實
+    cutover 時填入。**本文件明確聲明不構成 production deployment 授權**
+    ——本任務包自身文字規定需 owner 明確核准才能執行真實部署，本 session
+    未請求也未取得此核准。
   - **2026-07-21 owner 決定**：V1.2 全部任務完成後，以完整換版取代目前正式站，
     不在此之前逐一修復現有正式站上的既有問題（owner 已知現有正式站有未指明
     的錯誤，決定擱置、留到換版時一次解決，不插隊）。換版同時把 PHP 後端路徑

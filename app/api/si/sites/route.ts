@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "@/lib/serverSession";
 import { phpListSiSites } from "@/lib/si/siApi";
 import { hasSearchIntelligenceAccess } from "@/lib/subscription";
-import { resolveWorkspaceContext } from "@/lib/workspaceServer";
 
 export async function GET(req: Request) {
   try {
@@ -28,8 +27,9 @@ export async function GET(req: Request) {
       );
     }
 
-    const workspace = await resolveWorkspaceContext(req, user);
-    const data = await phpListSiSites(workspace.legacyOwnerMemberId);
+    // See app/api/si/aeo/summary/route.ts for why this no longer calls
+    // resolveWorkspaceContext().
+    const data = await phpListSiSites(Number(user.id));
     return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(

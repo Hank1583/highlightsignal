@@ -183,7 +183,7 @@ final class SignalRepository
      * pattern already used by ga/ownership.php's
      * ga_require_connection_ownership() for a dynamic parameter count.
      */
-    private function bindDynamic(\mysqli_stmt $statement, string $types, array $params): void
+    private function bindDynamic(\mysqli_stmt $statement, string $types, array $params)
     {
         $arguments = array($types);
         foreach ($params as $index => $value) {

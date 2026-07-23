@@ -39,7 +39,11 @@ export async function resolveWorkspaceContext(
     const payload = await response.json();
 
     if (!response.ok || !payload?.ok || !payload?.data) {
-      throw new Error(response.status === 403 ? "WORKSPACE_FORBIDDEN" : "WORKSPACE_UNAVAILABLE");
+      // TEMP-DIAG: surface the PHP backend's real error.message instead of
+      // only a generic label, to diagnose live WORKSPACE_FORBIDDEN reports.
+      // Revert to the plain label once diagnosis is done.
+      const detail = payload?.error?.message ? `: ${payload.error.message}` : "";
+      throw new Error((response.status === 403 ? "WORKSPACE_FORBIDDEN" : "WORKSPACE_UNAVAILABLE") + detail);
     }
 
     return {
@@ -54,7 +58,7 @@ export async function resolveWorkspaceContext(
     // backend (suspended membership, or a workspace the member explicitly
     // requested but doesn't belong to) -- V09-02/05 require that a legacy
     // fallback never bypass a membership check, so this is never swallowed.
-    if (error instanceof Error && error.message === "WORKSPACE_FORBIDDEN") {
+    if (error instanceof Error && error.message.startsWith("WORKSPACE_FORBIDDEN")) {
       throw error;
     }
 

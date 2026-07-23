@@ -176,7 +176,7 @@ final class EvidenceRepository
         return $this->database->affected_rows > 0;
     }
 
-    private function bindDynamic(\mysqli_stmt $statement, string $types, array $params): void
+    private function bindDynamic(\mysqli_stmt $statement, string $types, array $params)
     {
         $arguments = array($types);
         foreach ($params as $index => $value) {

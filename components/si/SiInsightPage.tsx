@@ -140,7 +140,7 @@ function buildScoreBreakdown(module: SiModule, summary: SiSummary) {
 }
 
 export default function SiInsightPage({ module, eyebrow, emptyTitle, iconMode }: ModuleConfig) {
-  const { currentWorkspace } = useWorkspace();
+  const { currentWorkspace, loading: workspaceLoading } = useWorkspace();
   const workspaceId = currentWorkspace.id;
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") || "overview";
@@ -283,15 +283,21 @@ export default function SiInsightPage({ module, eyebrow, emptyTitle, iconMode }:
   }, [workspaceId]);
 
   useEffect(() => {
+    // Wait for WorkspaceProvider to resolve the real workspace id -- while
+    // it's still loading, currentWorkspace.id is a placeholder (the
+    // member's own numeric id, not a real workspace id), and sending that
+    // to the backend gets rejected as WORKSPACE_FORBIDDEN.
+    if (workspaceLoading) return;
     loadSites();
-  }, [loadSites]);
+  }, [loadSites, workspaceLoading]);
 
   useEffect(() => {
+    if (workspaceLoading) return;
     if (siteId) {
       void loadSummary(siteId, tab);
       void loadHistory(siteId, tab);
     }
-  }, [loadHistory, loadSummary, siteId, tab]);
+  }, [loadHistory, loadSummary, siteId, tab, workspaceLoading]);
 
   const scoreBreakdown = summary ? buildScoreBreakdown(module, summary) : null;
   const topRecommendation =

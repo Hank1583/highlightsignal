@@ -146,7 +146,7 @@ final class WorkflowRepository
     }
 
     /** V10-04: called from WorkflowService::get() when a signal-backed Recommendation's Signal has resolved/dismissed. */
-    public function archiveRecommendation(int $workspaceId, int $recommendationId): void
+    public function archiveRecommendation(int $workspaceId, int $recommendationId)
     {
         $statement = $this->database->prepare(
             "UPDATE recommendations SET status = 'archived' WHERE id = ? AND workspace_id = ?"
@@ -238,7 +238,7 @@ final class WorkflowRepository
     public function findDecisionByIdempotencyKey(int $workspaceId, string $idempotencyKey)
     {
         $statement = $this->database->prepare(
-            'SELECT public_id, decision, actor_member_id, note, expected_outcome,
+            'SELECT id, public_id, decision, actor_member_id, note, expected_outcome,
                     recommendation_revision, idempotency_key, created_at
              FROM decisions WHERE workspace_id = ? AND idempotency_key = ? LIMIT 1'
         );
@@ -251,7 +251,7 @@ final class WorkflowRepository
     public function latestDecision(int $workspaceId, int $recommendationId)
     {
         $statement = $this->database->prepare(
-            'SELECT public_id, decision, actor_member_id, note, expected_outcome,
+            'SELECT id, public_id, decision, actor_member_id, note, expected_outcome,
                     recommendation_revision, idempotency_key, created_at
              FROM decisions WHERE workspace_id = ? AND recommendation_id = ?
              ORDER BY id DESC LIMIT 1'
@@ -273,17 +273,35 @@ final class WorkflowRepository
         return is_array($row) ? $row : null;
     }
 
-    public function createTask(int $workspaceId, int $recommendationId, int $memberId, string $title, string $description, array $steps): array
+    /** V11-01: lookup by the task's own id, for update_task (which only gets a task_id from the caller, not a recommendation_id). */
+    public function findTaskById(int $workspaceId, int $taskId)
+    {
+        $statement = $this->database->prepare(
+            'SELECT * FROM tasks WHERE workspace_id = ? AND id = ? LIMIT 1'
+        );
+        $statement->bind_param('ii', $workspaceId, $taskId);
+        $statement->execute();
+        $row = $statement->get_result()->fetch_assoc();
+        return is_array($row) ? $row : null;
+    }
+
+    /**
+     * V11-01: now takes $actionId -- `action_id` is dual-written alongside
+     * the still-NOT-NULL `recommendation_id` (migrations/029's expand
+     * discipline), so every existing read-by-recommendation_id call site
+     * (findTask(), WorkflowService::get()) keeps working unchanged.
+     */
+    public function createTask(int $workspaceId, int $recommendationId, int $actionId, int $memberId, string $title, string $description, array $steps): array
     {
         $existing = $this->findTask($workspaceId, $recommendationId);
         if (is_array($existing)) return $existing;
 
         $publicId = $this->uuid();
         $statement = $this->database->prepare(
-            'INSERT INTO tasks (public_id, workspace_id, recommendation_id, title, description, created_by_member_id, assigned_member_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO tasks (public_id, workspace_id, recommendation_id, action_id, title, description, created_by_member_id, assigned_member_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $statement->bind_param('siissii', $publicId, $workspaceId, $recommendationId, $title, $description, $memberId, $memberId);
+        $statement->bind_param('siiissii', $publicId, $workspaceId, $recommendationId, $actionId, $title, $description, $memberId, $memberId);
         $statement->execute();
         $taskId = (int) $statement->insert_id;
 
@@ -299,6 +317,73 @@ final class WorkflowRepository
         }
 
         return $this->findTask($workspaceId, $recommendationId);
+    }
+
+    /**
+     * V11-01: manual lifecycle mutation (status/assignee/due date/
+     * completion note) -- legal-transition validation happens in
+     * WorkflowService, this method only writes whichever fields were
+     * actually supplied. `completed` is never settable through here (only
+     * updateStep()'s automatic step-driven recompute sets it) -- enforced
+     * by WorkflowService, not re-checked here, same division of labor as
+     * every other Repository/Service pair in this codebase.
+     *
+     * @param array<string, mixed> $fields any of status/assigned_member_id/due_at/completion_note
+     */
+    public function updateTaskLifecycle(int $workspaceId, int $taskId, array $fields)
+    {
+        $sets = array();
+        $types = '';
+        $params = array();
+
+        if (array_key_exists('status', $fields)) {
+            $sets[] = 'status = ?';
+            $types .= 's';
+            $params[] = $fields['status'];
+        }
+        if (array_key_exists('assigned_member_id', $fields)) {
+            $sets[] = 'assigned_member_id = ?';
+            $types .= 'i';
+            $params[] = $fields['assigned_member_id'];
+        }
+        if (array_key_exists('due_at', $fields)) {
+            $sets[] = 'due_at = ?';
+            $types .= 's';
+            $params[] = $fields['due_at'];
+        }
+        if (array_key_exists('completion_note', $fields)) {
+            $sets[] = 'completion_note = ?';
+            $types .= 's';
+            $params[] = $fields['completion_note'];
+        }
+
+        if (count($sets) === 0) {
+            return;
+        }
+
+        $sql = 'UPDATE tasks SET ' . implode(', ', $sets) . ' WHERE id = ? AND workspace_id = ?';
+        $types .= 'ii';
+        $params[] = $taskId;
+        $params[] = $workspaceId;
+
+        $statement = $this->database->prepare($sql);
+        $this->bindDynamic($statement, $types, $params);
+        $statement->execute();
+    }
+
+    /**
+     * mysqli_stmt::bind_param() binds by reference and this project targets
+     * PHP 7.0 (no `execute(array $params)`, PHP 8.1+ only) -- same
+     * call_user_func_array + by-reference pattern already used by
+     * SignalRepository/EvidenceRepository for a dynamic parameter count.
+     */
+    private function bindDynamic(\mysqli_stmt $statement, string $types, array $params)
+    {
+        $arguments = array($types);
+        foreach ($params as $index => $value) {
+            $arguments[] = &$params[$index];
+        }
+        call_user_func_array(array($statement, 'bind_param'), $arguments);
     }
 
     public function listSteps(int $taskId): array
@@ -324,11 +409,18 @@ final class WorkflowRepository
         $statement->bind_param('siiii', $status, $completedValue, $stepId, $taskId, $workspaceId);
         $statement->execute();
 
+        // V11-01: the automatic step-driven recompute below only applies
+        // while the task is 'pending'/'in_progress' -- a 'blocked' task is
+        // frozen (a human must explicitly call update_task to unblock it
+        // before step-completion can move it again), and 'cancelled'/
+        // 'completed' are terminal (WorkflowService rejects update_step
+        // entirely for those before this query ever runs, but the guard
+        // here is the real data-integrity boundary, not just a UI nicety).
         $updateTask = $this->database->prepare(
             "UPDATE tasks t SET
                t.status = IF((SELECT COUNT(*) FROM task_steps s WHERE s.task_id = t.id AND s.status <> 'completed') = 0, 'completed', 'in_progress'),
                t.completed_at = IF((SELECT COUNT(*) FROM task_steps s WHERE s.task_id = t.id AND s.status <> 'completed') = 0, NOW(), NULL)
-             WHERE t.id = ? AND t.workspace_id = ?"
+             WHERE t.id = ? AND t.workspace_id = ? AND t.status IN ('pending', 'in_progress')"
         );
         $updateTask->bind_param('ii', $taskId, $workspaceId);
         $updateTask->execute();

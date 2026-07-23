@@ -32,7 +32,16 @@ final class WorkspaceAccessPolicy
         $row = $statement->get_result()->fetch_assoc();
 
         if (!is_array($row)) {
-            throw new AuthorizationException('Workspace access denied.');
+            // TEMP-DIAG: expose which (workspace_id, member_id) pair had no
+            // active workspace_members row -- both values are already known
+            // to the caller (it signed the request with them), so this adds
+            // no new information to an unauthorized party. Revert to the
+            // generic message once the WORKSPACE_FORBIDDEN reports are done.
+            throw new AuthorizationException(sprintf(
+                'Workspace access denied for workspace_id=%d, member_id=%d.',
+                $workspaceId,
+                $memberId
+            ));
         }
 
         return [
